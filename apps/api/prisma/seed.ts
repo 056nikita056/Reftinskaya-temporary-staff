@@ -71,7 +71,9 @@ async function main(): Promise<void> {
     update: {
       active: true,
       mustChangePassword: true,
-      passwordHash
+      passwordHash,
+      failedAttempts: 0,
+      lockedUntil: null
     },
     create: {
       login: "admin",
