@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: reftinskaya-staff-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reftinskaya_staff
+      POSTGRES_USER: reftinskaya
+      POSTGRES_PASSWORD: reftinskaya
+    ports:
+      - "55432:5432"
+    volumes:
+      - reftinskaya_staff_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reftinskaya -d reftinskaya_staff"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  reftinskaya_staff_postgres:

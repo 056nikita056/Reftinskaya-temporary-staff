@@ -7,14 +7,21 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm --workspace apps/web --if-present run dev -- --host 0.0.0.0 --port 8095",
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev:api\" \"npm --workspace apps/web run dev -- --host 0.0.0.0 --port 8095\"",
+    "dev:api": "npm --workspace apps/api run start:dev",
     "build": "npm --workspaces --if-present run build",
+    "build:api": "npm --workspace apps/api run build",
     "typecheck": "npm --workspaces --if-present run typecheck",
     "lint": "npm --workspaces --if-present run lint",
-    "test": "npm --workspaces --if-present run test"
+    "test": "npm --workspaces --if-present run test",
+    "prisma:generate": "npm --workspace apps/api run prisma:generate",
+    "prisma:migrate:dev": "npm --workspace apps/api run prisma:migrate:dev",
+    "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
+    "seed": "npm --workspace apps/api run seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "eslint": "^10.5.0",
     "globals": "^17.6.0",

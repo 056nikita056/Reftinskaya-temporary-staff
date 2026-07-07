@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Factory {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @db.VarChar(255)
+  timezone         String            @default("Asia/Yekaterinburg") @db.VarChar(64)
+  theme            Json?
+  active           Boolean           @default(true)
+  outsourcers      Outsourcer[]
+  userFactoryRoles UserFactoryRole[]
+  auditLogs        AuditLog[]
+  @@map("factories")
+}
+
+model Outsourcer {
+  id               String            @id @default(uuid()) @db.Uuid
+  factoryId        String            @map("factory_id") @db.Uuid
+  name             String            @db.VarChar(255)
+  externalRef      String?           @map("external_ref") @db.VarChar(128)
+  active           Boolean           @default(true)
+  factory          Factory           @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  userFactoryRoles UserFactoryRole[]
+  @@unique([factoryId, name])
+  @@index([factoryId])
+  @@map("outsourcers")
+}
+
+model Role {
+  id               String            @id @default(uuid()) @db.Uuid
+  code             String            @unique @db.VarChar(64)
+  name             String            @db.VarChar(255)
+  active           Boolean           @default(true)
+  userFactoryRoles UserFactoryRole[]
+  @@map("roles")
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  login               String               @unique @db.VarChar(64)
+  passwordHash        String               @map("password_hash")
+  mustChangePassword  Boolean              @default(false) @map("must_change_password")
+  failedAttempts      Int                  @default(0) @map("failed_attempts")
+  lockedUntil         DateTime?            @map("locked_until") @db.Timestamptz(6)
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  profile             UserProfile?
+  userFactoryRoles    UserFactoryRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+  @@map("users")
+}
+
+model UserProfile {
+  userId    String   @id @map("user_id") @db.Uuid
+  fullName  String   @map("full_name") @db.VarChar(255)
+  phone     String?  @db.VarChar(32)
+  email     String?  @db.VarChar(255)
+  position  String?  @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_profiles")
+}
+
+model UserFactoryRole {
+  userId       String      @map("user_id") @db.Uuid
+  factoryId    String      @map("factory_id") @db.Uuid
+  roleId       String      @map("role_id") @db.Uuid
+  outsourcerId String?     @map("outsourcer_id") @db.Uuid
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  factory      Factory     @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  outsourcer   Outsourcer? @relation(fields: [outsourcerId], references: [id], onDelete: Restrict)
+  @@id([userId, factoryId, roleId])
+  @@index([userId])
+  @@index([factoryId, roleId])
+  @@index([outsourcerId])
+  @@map("user_factory_roles")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  jti       String    @unique @db.Uuid
+  familyId  String    @map("family_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId, revokedAt, expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  factoryId String?  @map("factory_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(64)
+  entity    String?  @db.VarChar(64)
+  entityId  String?  @map("entity_id") @db.Uuid
+  ip        String?  @db.VarChar(64)
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  factory   Factory? @relation(fields: [factoryId], references: [id], onDelete: SetNull)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([factoryId, createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
