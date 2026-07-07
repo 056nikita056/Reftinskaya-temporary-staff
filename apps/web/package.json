@@ -1,0 +1,35 @@
+{
+  "name": "@reftinskaya/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "eslint .",
+    "test": "npm run typecheck && cross-env TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm scripts/mutation-delta.test.ts && cross-env TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm scripts/offline-queue.test.ts && cross-env TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm scripts/compat-boundary.test.ts",
+    "test:visual:housing": "cross-env TS_NODE_TRANSPILE_ONLY=true node --loader ts-node/esm scripts/housing-visual.test.ts",
+    "preview": "vite preview --host 0.0.0.0 --port 8095"
+  },
+  "dependencies": {
+    "@reftinskaya/contracts": "file:../../packages/contracts",
+    "@vite-pwa/assets-generator": "^1.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "vite-plugin-pwa": "^1.0.3",
+    "workbox-window": "^7.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "autoprefixer": "^10.4.20",
+    "playwright": "^1.61.1",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.16"
+  }
+}

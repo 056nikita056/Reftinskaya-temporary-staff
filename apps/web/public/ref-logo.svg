@@ -1,0 +1,14 @@
+<svg width="220" height="112" viewBox="0 0 220 112" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="REF">
+  <rect width="220" height="112" rx="18" fill="white"/>
+  <text
+    x="110"
+    y="75"
+    fill="#007A45"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="62"
+    font-weight="900"
+    letter-spacing="6"
+    text-anchor="middle"
+  >REF</text>
+  <path d="M36 99h148v-8H36v8Z" fill="#F6C500"/>
+</svg>

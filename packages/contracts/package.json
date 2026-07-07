@@ -1,0 +1,20 @@
+{
+  "name": "@reftinskaya/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "npm run typecheck"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "require": "./src/index.cjs",
+      "default": "./src/index.cjs"
+    }
+  },
+  "types": "./src/index.d.ts"
+}

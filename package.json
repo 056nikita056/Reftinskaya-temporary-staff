@@ -1,0 +1,25 @@
+{
+  "name": "reftinskaya-temporary-staff",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apps/web --if-present run dev -- --host 0.0.0.0 --port 8095",
+    "build": "npm --workspaces --if-present run build",
+    "typecheck": "npm --workspaces --if-present run typecheck",
+    "lint": "npm --workspaces --if-present run lint",
+    "test": "npm --workspaces --if-present run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.61.1"
+  }
+}
