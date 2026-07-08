@@ -576,29 +576,9 @@ export class CompatController {
   }
 
   private async resolveOperationId(body: Record<string, unknown>): Promise<string> {
-    const operationId = stringValue(body.operation_id);
-    if (operationId) {
-      await this.requireActiveOperationCatalogItem(operationId);
-      return operationId;
-    }
-    const name = requiredString(body.name, "OPERATION_REQUIRED");
-    const existing = await this.prisma.operation.findFirst({
-      where: {
-        name: {
-          equals: name,
-          mode: "insensitive"
-        }
-      }
-    });
-    if (existing) return existing.id;
-    const created = await this.prisma.operation.create({
-      data: {
-        id: randomUUID(),
-        name,
-        active: true
-      }
-    });
-    return created.id;
+    const operationId = requiredString(body.operation_id, "OPERATION_REQUIRED");
+    await this.requireActiveOperationCatalogItem(operationId);
+    return operationId;
   }
 
   private async requireStatusByCode(code: string) {
