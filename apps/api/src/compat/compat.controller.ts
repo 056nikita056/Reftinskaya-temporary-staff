@@ -305,11 +305,15 @@ export class CompatController {
   }
 
   private async updatePlan(factoryId: string, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
-    await this.requirePlan(factoryId, id);
+    const existing = await this.requirePlanWithStatus(factoryId, id);
     const data: Record<string, unknown> = {};
     if ("start_date" in body) data.startDate = parseApiDate(requiredString(body.start_date, "START_DATE_REQUIRED"));
     if ("end_date" in body) data.endDate = parseApiDate(requiredString(body.end_date, "END_DATE_REQUIRED"));
-    if ("status" in body) data.statusId = (await this.requireStatusByTitle(requiredString(body.status, "STATUS_REQUIRED"))).id;
+    if ("status" in body) {
+      const nextStatus = await this.requireStatusByTitle(requiredString(body.status, "STATUS_REQUIRED"));
+      assertPlanStatusTransition(existing.status, nextStatus);
+      data.statusId = nextStatus.id;
+    }
     const plan = await this.prisma.plan.update({
       where: { id },
       data,
@@ -609,6 +613,15 @@ export class CompatController {
     return plan;
   }
 
+  private async requirePlanWithStatus(factoryId: string, id: string) {
+    const plan = await this.prisma.plan.findFirst({
+      where: { id, factoryId },
+      include: { status: true }
+    });
+    if (!plan) throwNotFound("plans", id);
+    return plan;
+  }
+
   private async requirePlanOperation(factoryId: string, id: string) {
     const operation = await this.prisma.planOperation.findFirst({
       where: {
@@ -817,6 +830,24 @@ function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
   }
   if (!actions.size) actions.add("plans.edit");
   return [...actions];
+}
+
+function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }): void {
+  if (current.code === next.code) return;
+  const allowed: Record<string, string[]> = {
+    draft: ["submitted_to_hr"],
+    submitted_to_hr: ["received_by_outsourcer"],
+    received_by_outsourcer: ["on_approval"],
+    rejected: ["on_approval"],
+    on_approval: ["approved", "rejected"],
+    approved: []
+  };
+  if (!allowed[current.code]?.includes(next.code)) {
+    throw new BadRequestException({
+      code: "INVALID_PLAN_STATUS_TRANSITION",
+      message: `Недопустимый переход статуса плана: ${current.title} -> ${next.title}`
+    });
+  }
 }
 
 function actionsForOperationMutation(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>): AccessAction[] {
