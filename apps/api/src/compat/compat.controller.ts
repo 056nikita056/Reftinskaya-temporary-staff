@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Post, Put } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { accessForRole, type AccessAction, type BootstrapData, type Factory, type MutationDelta, type MutationResource, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
+import { accessForRole, USER_ROLES, type AccessAction, type BootstrapData, type Factory, type MutationDelta, type MutationResource, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
 import { randomUUID } from "node:crypto";
 
 import type { AccessTokenPayload } from "../auth/auth.types";
@@ -23,6 +23,7 @@ type CompatStore = {
 };
 
 const compatStores = new Map<string, CompatStore>();
+const userRoleSet = new Set<string>(USER_ROLES);
 
 @ApiTags("compat")
 @ApiBearerAuth()
@@ -32,6 +33,8 @@ export class CompatController {
 
   @Get("bootstrap")
   async bootstrap(@CurrentUser() user: AccessTokenPayload): Promise<BootstrapData> {
+    const roles = await this.requireCurrentRoles(user.sub);
+    const role = roles.includes(user.role) ? user.role : roles[0];
     const factory = await this.prisma.factory.findUnique({
       where: { id: user.factoryId }
     });
@@ -44,7 +47,7 @@ export class CompatController {
           active: factory.active
         }
       : undefined;
-    const permissions = accessForRoles(user.roles?.length ? user.roles : [user.role]);
+    const permissions = accessForRoles(roles);
     const planData = await this.loadPlanData(user.factoryId);
     const store = storeFor(user.factoryId);
 
@@ -66,8 +69,8 @@ export class CompatController {
         id: user.sub,
         factoryId: user.factoryId,
         login: user.login,
-        role: user.role,
-        roles: user.roles,
+        role,
+        roles,
         fullName: user.fullName,
         factory: apiFactory,
         access: permissions
@@ -87,7 +90,7 @@ export class CompatController {
   async create(@Param("resource") rawResource: string, @Body() body: Record<string, unknown> = {}, @CurrentUser() user: AccessTokenPayload): Promise<MutationDelta> {
     const resource = normalizeResource(rawResource);
     const store = storeFor(user.factoryId);
-    requireMutationAccess(user, resource, "POST", body, store);
+    requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "POST", body, store);
 
     if (resource === "plans") {
       const created = await this.createPlan(user, body);
@@ -159,7 +162,7 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
-    requireMutationAccess(user, resource, "PUT", body, store);
+    requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "PUT", body, store);
     if (resource === "plans") return this.updatePlan(user.factoryId, id, body);
     if (resource === "sections") return this.updateSection(user.factoryId, id, body);
     if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
@@ -178,7 +181,7 @@ export class CompatController {
   }
 
   @Put(":resource")
-  updateSingleton(@Param("resource") rawResource: string, @Body() body: Record<string, unknown> = {}, @CurrentUser() user: AccessTokenPayload): MutationDelta {
+  async updateSingleton(@Param("resource") rawResource: string, @Body() body: Record<string, unknown> = {}, @CurrentUser() user: AccessTokenPayload): Promise<MutationDelta> {
     const resource = normalizeResource(rawResource);
     if (resource !== "settings") {
       throw new BadRequestException({
@@ -187,7 +190,7 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
-    requireMutationAccess(user, resource, "PUT", body, store);
+    requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "PUT", body, store);
     store.settings = { ...store.settings, ...body };
     return {
       ok: true,
@@ -207,7 +210,7 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
-    requireMutationAccess(user, resource, "DELETE", {}, store);
+    requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "DELETE", {}, store);
     if (resource === "plans") return this.deletePlan(user.factoryId, id);
     if (resource === "sections") return this.deleteSection(user.factoryId, id);
     if (resource === "operationCatalog") return this.deleteOperationCatalogItem(id);
@@ -685,6 +688,37 @@ export class CompatController {
     }
     return operation;
   }
+
+  private async requireCurrentRoles(userId: string): Promise<UserRole[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        usersRoles: {
+          include: {
+            role: true
+          }
+        }
+      }
+    });
+    if (!user?.active) {
+      throw new ForbiddenException({
+        code: "USER_NOT_ACTIVE",
+        message: "Пользователь недоступен"
+      });
+    }
+    const roleCodes = user.usersRoles
+      .filter((item) => item.role.active && userRoleSet.has(item.role.code))
+      .map((item) => item.role.code as UserRole);
+    const available = new Set(roleCodes);
+    const roles = USER_ROLES.filter((role) => available.has(role));
+    if (!roles.length) {
+      throw new ForbiddenException({
+        code: "NO_FACTORY_ROLE",
+        message: "Нет назначенных ролей"
+      });
+    }
+    return roles;
+  }
 }
 
 function accessForRoles(roles: UserRole[]): RoleAccess {
@@ -802,8 +836,8 @@ function upsertFact(store: CompatStore, body: Record<string, unknown>, factoryId
   return fact;
 }
 
-function requireMutationAccess(user: AccessTokenPayload, resource: MutationResource, method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, store: CompatStore): void {
-  const permissions = accessForRoles(user.roles?.length ? user.roles : [user.role]);
+function requireMutationAccess(roles: UserRole[], resource: MutationResource, method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, store: CompatStore): void {
+  const permissions = accessForRoles(roles);
   const requiredActions = requiredActionsForMutation(resource, method, body, store);
   const missingActions = requiredActions.filter((action) => !permissions.actions.includes(action));
   if (missingActions.length) {
