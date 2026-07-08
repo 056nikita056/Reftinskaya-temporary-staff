@@ -78,6 +78,8 @@ function codeForStatus(status: number): string {
       return "UNAUTHORIZED";
     case HttpStatus.FORBIDDEN:
       return "FORBIDDEN";
+    case HttpStatus.NOT_FOUND:
+      return "NOT_FOUND";
     case HttpStatus.CONFLICT:
       return "CONFLICT";
     default:
