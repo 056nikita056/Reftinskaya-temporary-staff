@@ -162,11 +162,12 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
-    requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "PUT", body, store);
+    const roles = await this.requireCurrentRoles(user.sub);
+    requireMutationAccess(roles, resource, "PUT", body, store);
     if (resource === "plans") return this.updatePlan(user.factoryId, id, body);
     if (resource === "sections") return this.updateSection(user.factoryId, id, body);
     if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
-    if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body);
+    if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body, roles);
     const collection = collectionFor(store, resource);
     const existing = requireExisting(collection, id, resource);
     const data = { ...existing, ...body, id };
@@ -373,9 +374,9 @@ export class CompatController {
     };
   }
 
-  private async updatePlanOperation(factoryId: string, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
+  private async updatePlanOperation(factoryId: string, id: string, body: Record<string, unknown>, roles: UserRole[]): Promise<MutationDelta> {
     const existing = await this.requirePlanOperationWithPlanStatus(factoryId, id);
-    assertPlanOperationMutationStatus("PUT", body, existing.plan.status);
+    assertPlanOperationMutationStatus("PUT", body, existing.plan.status, roles);
     const data: Record<string, unknown> = {};
     if ("section_id" in body) {
       data.territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
@@ -903,7 +904,7 @@ function assertPlanStatusTransition(current: { code: string; title: string }, ne
   }
 }
 
-function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, status: { code: string; title: string }): void {
+function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, status: { code: string; title: string }, roles: UserRole[] = []): void {
   if (method === "POST" || method === "DELETE") {
     assertPlanStatusIn(status, ["draft"], "PLAN_OPERATION_STATUS_LOCKED", "Строки плана можно добавлять и удалять только в статусе «В доработке»");
     return;
@@ -913,7 +914,11 @@ function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", bo
     assertPlanStatusIn(status, ["draft"], "PLAN_OPERATION_STATUS_LOCKED", "Фабричные поля строки плана можно менять только в статусе «В доработке»");
   }
   if ("staff_count" in body || "outsource_count" in body) {
-    assertPlanStatusIn(status, ["submitted_to_hr", "received_by_outsourcer"], "PLAN_OPERATION_STATUS_LOCKED", "HR-поля строки плана можно менять только на HR-этапе");
+    const permissions = accessForRoles(roles);
+    const canEditDraftAsFactoryHr = status.code === "draft" && permissions.actions.includes("plans.factory.edit") && permissions.actions.includes("plans.hr.edit");
+    if (!canEditDraftAsFactoryHr) {
+      assertPlanStatusIn(status, ["submitted_to_hr", "received_by_outsourcer"], "PLAN_OPERATION_STATUS_LOCKED", "HR-поля строки плана можно менять только на HR-этапе");
+    }
   }
   if ("hours_per_day" in body || "rate_per_hour" in body) {
     assertPlanStatusIn(status, ["received_by_outsourcer", "rejected"], "PLAN_OPERATION_STATUS_LOCKED", "Поля аутсорсинга можно менять только на этапе аутсорсера");

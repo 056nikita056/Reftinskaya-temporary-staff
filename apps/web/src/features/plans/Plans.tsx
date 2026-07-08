@@ -70,7 +70,7 @@ function primaryKind(access: PlanAccess, fallbackRole: RoleKey): PlanKind {
 function editAccessForPlan(access: PlanAccess, plan: Plan): PlanEditAccess {
   return {
     factory: access.factory && plan.status === "В доработке",
-    hr: access.hr && canEditPlan("hr", plan),
+    hr: access.hr && (canEditPlan("hr", plan) || (access.factory && plan.status === "В доработке")),
     out: access.out && canEditPlan("out", plan)
   };
 }
