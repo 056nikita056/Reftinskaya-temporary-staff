@@ -370,9 +370,12 @@ export class CompatController {
     const data: Record<string, unknown> = {};
     if ("section_id" in body) {
       data.territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
-      await this.requireSection(factoryId, data.territoryId as string);
+      await this.requireActiveSection(factoryId, data.territoryId as string);
     }
-    if ("operation_id" in body) data.operationId = requiredString(body.operation_id, "OPERATION_REQUIRED");
+    if ("operation_id" in body) {
+      data.operationId = requiredString(body.operation_id, "OPERATION_REQUIRED");
+      await this.requireActiveOperationCatalogItem(data.operationId as string);
+    }
     if ("required_staff" in body) data.requiredCount = numberValue(body.required_staff, 1);
     if ("staff_count" in body) data.staffCount = numberValue(body.staff_count, 0);
     if ("outsource_count" in body) data.outsourcingCount = numberValue(body.outsource_count, 0);
@@ -560,7 +563,7 @@ export class CompatController {
   private async planOperationCreateInput(factoryId: string, body: Record<string, unknown>) {
     const operationId = await this.resolveOperationId(body);
     const territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
-    await this.requireSection(factoryId, territoryId);
+    await this.requireActiveSection(factoryId, territoryId);
     return {
       id: stringValue(body.id) ?? randomUUID(),
       territoryId,
@@ -575,7 +578,7 @@ export class CompatController {
   private async resolveOperationId(body: Record<string, unknown>): Promise<string> {
     const operationId = stringValue(body.operation_id);
     if (operationId) {
-      await this.requireOperationCatalogItem(operationId);
+      await this.requireActiveOperationCatalogItem(operationId);
       return operationId;
     }
     const name = requiredString(body.name, "OPERATION_REQUIRED");
@@ -643,9 +646,31 @@ export class CompatController {
     return section;
   }
 
+  private async requireActiveSection(factoryId: string, id: string) {
+    const section = await this.requireSection(factoryId, id);
+    if (!section.active) {
+      throw new BadRequestException({
+        code: "INACTIVE_SECTION",
+        message: "Архивный участок нельзя выбрать в плане"
+      });
+    }
+    return section;
+  }
+
   private async requireOperationCatalogItem(id: string) {
     const operation = await this.prisma.operation.findUnique({ where: { id } });
     if (!operation) throwNotFound("operationCatalog", id);
+    return operation;
+  }
+
+  private async requireActiveOperationCatalogItem(id: string) {
+    const operation = await this.requireOperationCatalogItem(id);
+    if (!operation.active) {
+      throw new BadRequestException({
+        code: "INACTIVE_OPERATION",
+        message: "Архивную операцию нельзя выбрать в плане"
+      });
+    }
     return operation;
   }
 }
