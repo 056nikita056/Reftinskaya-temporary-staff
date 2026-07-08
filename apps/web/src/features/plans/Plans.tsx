@@ -86,6 +86,11 @@ function sendKindForPlan(access: PlanEditAccess, plan: Plan): PlanKind | null {
   return null;
 }
 
+function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
+  if (kind === "hr" && plan.status === "Отправлено") return "Получено";
+  return plan.status;
+}
+
 function operationCreatePayload(row: Operation) {
   const required = numberValue(row.required_staff);
   const staff = numberValue(row.staff_count);
@@ -166,7 +171,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
                 <p className="font-black">План {planPeriod(plan)}</p>
                 <p className="mt-1 text-sm font-bold text-slate-600">Персонал: {plan.required_staff || 0} · Штат: {plan.staff_count || 0} · Аутсорсинг: {calculateOutsource(plan.required_staff, plan.staff_count)}</p>
               </div>
-              <span className={`text-xs font-black ${statusTone(plan.status)}`}>{plan.status}</span>
+              <span className={`text-xs font-black ${statusTone(plan.status)}`}>{displayPlanStatusForRole(plan, kind)}</span>
             </div>
           </button>
         ))}
@@ -413,7 +418,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
-      <PlanHeader plan={plan} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
+      <PlanHeader plan={plan} displayStatus={displayPlanStatusForRole(plan, kind)} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
       <PlanFlowNotice kind={kind} plan={plan} />
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
@@ -458,13 +463,13 @@ function PlanFlowNotice({ kind, plan }: { kind: PlanKind; plan: Plan }) {
   );
 }
 
-function PlanHeader({ plan, dates, setDates, edit }: { plan: Plan; dates: { start_date: string; end_date: string }; setDates: (value: { start_date: string; end_date: string }) => void; edit: boolean }) {
+function PlanHeader({ plan, displayStatus = plan.status, dates, setDates, edit }: { plan: Plan; displayStatus?: string; dates: { start_date: string; end_date: string }; setDates: (value: { start_date: string; end_date: string }) => void; edit: boolean }) {
   return (
     <div className="rounded-lg bg-refGreen p-3 text-white">
       <div className="grid grid-cols-3 gap-2 text-center text-xs font-black">
         <div>Начало работ<br />{edit ? <input className="mt-1 w-full rounded px-2 py-1 text-center text-refDark" value={dates.start_date} onChange={(e) => setDates({ ...dates, start_date: e.target.value })} /> : plan.start_date}</div>
         <div>Окончание работ<br />{edit ? <input className="mt-1 w-full rounded px-2 py-1 text-center text-refDark" value={dates.end_date} onChange={(e) => setDates({ ...dates, end_date: e.target.value })} /> : plan.end_date}</div>
-        <div>Статус<br />{plan.status}</div>
+        <div>Статус<br />{displayStatus}</div>
       </div>
     </div>
   );
