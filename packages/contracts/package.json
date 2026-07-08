@@ -10,7 +10,7 @@
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "import": "./src/index.js",
+      "import": "./src/index.mjs",
       "require": "./src/index.cjs",
       "default": "./src/index.cjs"
     }
