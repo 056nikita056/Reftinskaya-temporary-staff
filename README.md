@@ -8,7 +8,7 @@
 - `apps/api` — новый NestJS + Prisma backend-каркас для этапа 1.
 - `packages/contracts` — общие TypeScript-типы и RBAC-контракт `@reftinskaya/contracts` для будущего API.
 
-Бэкенд переписывается поэтапно. На текущем шаге в `apps/api` есть каркас, health-роут, Prisma-схема, первая миграция и сид ролей; эндпоинты входа будут добавлены позже. Фронт продолжает обращаться к API через `VITE_API_BASE_URL` со значением по умолчанию `/api/v1`.
+Бэкенд переписывается поэтапно. Сейчас в `apps/api` есть авторизация, роли, фабрики, профиль пользователя, совместимый `compat` API для рабочих разделов, плановые таблицы в PostgreSQL и базовые endpoints блока 1. Фронт обращается к API через `VITE_API_BASE_URL` со значением по умолчанию `/api/v1`.
 
 ## Быстрый запуск
 
@@ -25,10 +25,20 @@ npm run dev
 
 Для локальной базы можно поднять PostgreSQL из `docker-compose.yml`.
 
+После миграций и seed доступен стартовый пользователь:
+
+```text
+login: admin
+password: admin12345
+```
+
+Пароль можно переопределить переменной `SEED_ADMIN_PASSWORD`.
+
 ## Проверки
 
 ```bash
 npm run typecheck
 npm run build
 npm run test
+bash scripts/smoke-auth.sh
 ```
