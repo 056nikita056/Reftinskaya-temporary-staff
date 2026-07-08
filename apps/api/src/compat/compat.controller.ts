@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Post, Put } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import type { Prisma } from "@prisma/client";
 import { accessForRole, USER_ROLES, type AccessAction, type BootstrapData, type Factory, type MutationDelta, type MutationResource, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
 import { randomUUID } from "node:crypto";
 
@@ -22,8 +23,12 @@ type CompatStore = {
   settings: Record<string, unknown>;
 };
 
+type PersistedResource = "employees" | "assignments" | "reservations" | "housingDorms" | "facts" | "explanations";
+
 const compatStores = new Map<string, CompatStore>();
 const userRoleSet = new Set<string>(USER_ROLES);
+const settingsRecordId = "__settings__";
+const persistedResources = new Set<PersistedResource>(["employees", "assignments", "reservations", "housingDorms", "facts", "explanations"]);
 
 @ApiTags("compat")
 @ApiBearerAuth()
@@ -50,6 +55,7 @@ export class CompatController {
     const permissions = accessForRoles(roles);
     const planData = filterPlanDataForAccess(await this.loadPlanData(user.factoryId), permissions);
     const store = storeFor(user.factoryId);
+    await this.hydrateStore(user.factoryId, store);
 
     return {
       plans: planData.plans,
@@ -90,6 +96,7 @@ export class CompatController {
   async create(@Param("resource") rawResource: string, @Body() body: Record<string, unknown> = {}, @CurrentUser() user: AccessTokenPayload): Promise<MutationDelta> {
     const resource = normalizeResource(rawResource);
     const store = storeFor(user.factoryId);
+    await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "POST", body, store);
 
     if (resource === "plans") {
@@ -111,6 +118,7 @@ export class CompatController {
 
     if (resource === "facts") {
       const fact = upsertFact(store, body, user.factoryId);
+      await this.persistCompatRecord(user.factoryId, resource, fact.id, fact);
       return {
         ok: true,
         action: "upserted",
@@ -131,6 +139,7 @@ export class CompatController {
       const id = stringValue(body.id) ?? randomUUID();
       const data = { id, factory_id: user.factoryId, ...body, side };
       store.explanations.set(id, data);
+      await this.persistCompatRecord(user.factoryId, resource, id, data);
       return {
         ok: true,
         action: "created",
@@ -143,6 +152,7 @@ export class CompatController {
     const id = stringValue(body.id) ?? randomUUID();
     const data = { id, factory_id: user.factoryId, ...body };
     collectionFor(store, resource).set(id, data);
+    await this.persistCompatRecord(user.factoryId, resource, id, data);
     return {
       ok: true,
       action: "created",
@@ -162,6 +172,7 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
+    await this.hydrateStore(user.factoryId, store);
     const roles = await this.requireCurrentRoles(user.sub);
     requireMutationAccess(roles, resource, "PUT", body, store);
     if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles);
@@ -172,6 +183,7 @@ export class CompatController {
     const existing = requireExisting(collection, id, resource);
     const data = { ...existing, ...body, id };
     collection.set(id, data);
+    await this.persistCompatRecord(user.factoryId, resource, id, data);
     return {
       ok: true,
       action: "updated",
@@ -191,8 +203,10 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
+    await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "PUT", body, store);
     store.settings = { ...store.settings, ...body };
+    await this.persistCompatRecord(user.factoryId, resource, settingsRecordId, store.settings);
     return {
       ok: true,
       action: "updated",
@@ -211,6 +225,7 @@ export class CompatController {
       });
     }
     const store = storeFor(user.factoryId);
+    await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "DELETE", {}, store);
     if (resource === "plans") return this.deletePlan(user.factoryId, id);
     if (resource === "sections") return this.deleteSection(user.factoryId, id);
@@ -219,6 +234,7 @@ export class CompatController {
     const collection = collectionFor(store, resource);
     requireExisting(collection, id, resource);
     collection.delete(id);
+    await this.deleteCompatRecord(user.factoryId, resource, id);
     return {
       ok: true,
       action: "deleted",
@@ -268,6 +284,57 @@ export class CompatController {
       operationCatalog: operationCatalog.map(mapOperationCatalogItem),
       operations: plans.flatMap((plan) => plan.operations.map(mapPlanOperation))
     };
+  }
+
+  private async hydrateStore(factoryId: string, store: CompatStore): Promise<void> {
+    for (const resource of persistedResources) {
+      collectionFor(store, resource).clear();
+    }
+    store.settings = {};
+    const records = await this.prisma.compatRecord.findMany({
+      where: { factoryId }
+    });
+    for (const record of records) {
+      if (record.resource === "settings" && isCompatData(record.data)) {
+        store.settings = { ...record.data };
+        continue;
+      }
+      if (!isPersistedResource(record.resource) || !isCompatData(record.data)) continue;
+      collectionFor(store, record.resource).set(record.recordId, { id: record.recordId, ...record.data });
+    }
+  }
+
+  private async persistCompatRecord(factoryId: string, resource: MutationResource, recordId: string, data: Record<string, unknown>): Promise<void> {
+    if (resource !== "settings" && !isPersistedResource(resource)) return;
+    await this.prisma.compatRecord.upsert({
+      where: {
+        factoryId_resource_recordId: {
+          factoryId,
+          resource,
+          recordId
+        }
+      },
+      update: {
+        data: data as Prisma.InputJsonValue
+      },
+      create: {
+        factoryId,
+        resource,
+        recordId,
+        data: data as Prisma.InputJsonValue
+      }
+    });
+  }
+
+  private async deleteCompatRecord(factoryId: string, resource: MutationResource, recordId: string): Promise<void> {
+    if (!isPersistedResource(resource)) return;
+    await this.prisma.compatRecord.deleteMany({
+      where: {
+        factoryId,
+        resource,
+        recordId
+      }
+    });
   }
 
   private async createPlan(user: AccessTokenPayload, body: Record<string, unknown>): Promise<MutationDelta> {
@@ -826,6 +893,14 @@ function storeFor(factoryId: string): CompatStore {
 
 function values(collection: Map<string, CompatRecord>): CompatRecord[] {
   return [...collection.values()];
+}
+
+function isPersistedResource(resource: string): resource is PersistedResource {
+  return persistedResources.has(resource as PersistedResource);
+}
+
+function isCompatData(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function collectionFor(store: CompatStore, resource: Exclude<MutationResource, "settings" | "operationCatalog">): Map<string, CompatRecord>;

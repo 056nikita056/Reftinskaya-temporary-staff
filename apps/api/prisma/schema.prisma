@@ -18,6 +18,7 @@ model Factory {
   territories    TerritoryTree[]
   plans          Plan[]
   auditLogs      AuditLog[]
+  compatRecords  CompatRecord[]
 
   @@map("factories")
 }
@@ -245,4 +246,19 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([entity, entityId])
   @@map("audit_logs")
+}
+
+model CompatRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  factoryId String   @map("factory_id") @db.Uuid
+  resource  String   @db.VarChar(64)
+  recordId  String   @map("record_id") @db.VarChar(128)
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  factory   Factory  @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+
+  @@unique([factoryId, resource, recordId])
+  @@index([factoryId, resource])
+  @@map("compat_records")
 }
