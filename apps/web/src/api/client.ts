@@ -55,6 +55,7 @@ const viteEnv = import.meta.env ?? {};
 const API_BASE = viteEnv.VITE_API_BASE_URL || "/api/v1";
 const COMPAT_API_BASE = viteEnv.VITE_COMPAT_API_BASE_URL || `${API_BASE}/compat`;
 const LEGACY_TOKEN_STORAGE_KEY = "reft-web-token-v1";
+const TOKEN_STORAGE_KEY = "reft-web-auth-tokens-v1";
 const AUTH_STATE_KEY = "reft-web-auth-v1";
 const BOOTSTRAP_CACHE_KEY = "reft-web-bootstrap-cache-v1";
 const MUTATION_QUEUE_KEY = "reft-web-mutation-queue-v1";
@@ -213,12 +214,32 @@ async function clearOfflineRecords() {
   });
 }
 
+function tokenStorage() {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 function readTokens(): StoredTokens | null {
-  return memoryTokens;
+  if (memoryTokens) return memoryTokens;
+  const stored = tokenStorage()?.getItem(TOKEN_STORAGE_KEY);
+  if (!stored) return null;
+  try {
+    const parsed = JSON.parse(stored) as StoredTokens;
+    if (!parsed.accessToken || !parsed.refreshToken) return null;
+    memoryTokens = parsed;
+    return parsed;
+  } catch {
+    tokenStorage()?.removeItem(TOKEN_STORAGE_KEY);
+    return null;
+  }
 }
 
 function writeTokens(tokens: StoredTokens) {
   memoryTokens = tokens;
+  tokenStorage()?.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
   localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
 }
 
@@ -300,13 +321,14 @@ export async function pendingMutationCount() {
 
 export function clearAuthTokens() {
   memoryTokens = null;
+  tokenStorage()?.removeItem(TOKEN_STORAGE_KEY);
   localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
   localStorage.removeItem(AUTH_STATE_KEY);
   void clearOfflineRecords();
 }
 
 export function hasAuthTokens() {
-  return Boolean(readTokens()?.accessToken || localStorage.getItem(AUTH_STATE_KEY));
+  return Boolean(readTokens()?.accessToken);
 }
 
 async function refreshAccessToken() {
