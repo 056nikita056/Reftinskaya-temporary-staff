@@ -215,6 +215,19 @@ export function App() {
     };
   }, [loggedIn]);
 
+  useEffect(() => {
+    const current = data?.currentUser;
+    if (!loggedIn || !current) return;
+    if (current.factory) setSelectedFactory(current.factory);
+    const nextRoles = current.roles?.length ? [...current.roles] : [current.role];
+    const nextAccess = current.access || accessForRoles(nextRoles);
+    setAuth((prev) =>
+      prev.role === current.role && prev.factoryId === current.factoryId && sameRoles(prev.roles, nextRoles) && sameAccess(prev.access, nextAccess)
+        ? prev
+        : { ...prev, role: current.role, roles: nextRoles, factoryId: current.factoryId, access: nextAccess }
+    );
+  }, [loggedIn, data?.currentUser]);
+
   const openModule = (key: ModuleKey) => {
     setActive(key);
     setView({ type: "list" });
