@@ -926,7 +926,7 @@ function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", bo
     const permissions = accessForRoles(roles);
     const canEditDraftAsFactoryHr = status.code === "draft" && permissions.actions.includes("plans.factory.edit") && permissions.actions.includes("plans.hr.edit");
     if (!canEditDraftAsFactoryHr) {
-      assertPlanStatusIn(status, ["submitted_to_hr", "received_by_outsourcer"], "PLAN_OPERATION_STATUS_LOCKED", "HR-поля строки плана можно менять только на HR-этапе");
+      assertPlanStatusIn(status, ["submitted_to_hr"], "PLAN_OPERATION_STATUS_LOCKED", "HR-поля строки плана можно менять только до отправки аутсорсеру");
     }
   }
   if ("hours_per_day" in body || "rate_per_hour" in body) {

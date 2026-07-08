@@ -49,7 +49,7 @@ export function planPeriod(plan?: Plan) {
 export function canEditPlan(kind: PlanKind, plan?: Plan) {
   if (!plan) return false;
   if (kind === "factory") return plan.status !== "Завершен";
-  if (kind === "hr") return plan.status === "Отправлено" || plan.status === "Получено";
+  if (kind === "hr") return plan.status === "Отправлено";
   return ["Получено", "Не утверждено"].includes(plan.status);
 }
 
