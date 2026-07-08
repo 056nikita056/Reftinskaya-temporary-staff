@@ -62,27 +62,6 @@ const OFFLINE_DB_NAME = "reft-web-offline-v1";
 const OFFLINE_STORE_NAME = "records";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
-const DEMO_FACTORIES: Factory[] = [
-  {
-    id: "reftinskaya-main",
-    name: "Рефтинская птицефабрика",
-    timezone: "Asia/Yekaterinburg",
-    active: true
-  },
-  {
-    id: "factory-svd",
-    name: "Среднеуральская площадка",
-    timezone: "Asia/Yekaterinburg",
-    active: true
-  },
-  {
-    id: "factory-demo",
-    name: "Тестовая фабрика",
-    timezone: "Asia/Yekaterinburg",
-    active: false
-  }
-];
-
 type MutateResult = BootstrapData | MutationDelta;
 
 type StoredTokens = {
@@ -383,12 +362,7 @@ function bootstrapPath(query: BootstrapQuery = {}) {
 
 export const api = {
   async factories() {
-    try {
-      const result = await coreRequest<Factory[]>("/factories", { auth: false });
-      return result.length ? result : DEMO_FACTORIES;
-    } catch {
-      return DEMO_FACTORIES;
-    }
+    return coreRequest<Factory[]>("/factories", { auth: false });
   },
   async login(login: string, password: string) {
     const response = await coreRequest<LoginResponse>("/auth/login", { method: "POST", body: { login: login.trim(), password }, auth: false });
@@ -443,8 +417,10 @@ export const api = {
       await writeBootstrapCache(next);
       return next;
     } catch (error) {
-      const cached = await readBootstrapCache();
-      if (cached) return { ...cached, pendingMutations: await pendingMutationCount() };
+      if (isOffline()) {
+        const cached = await readBootstrapCache();
+        if (cached) return { ...cached, pendingMutations: await pendingMutationCount() };
+      }
       throw error;
     }
   },

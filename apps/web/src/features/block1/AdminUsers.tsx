@@ -6,14 +6,6 @@ import { api } from "../../api/client";
 import { Empty } from "../../components/common";
 import { useUiFeedback } from "../../ui/feedback";
 
-const demoUsers: AdminUserRow[] = [
-  { id: "demo-1", fullName: "Алексей Петров", login: "a.petrov", role: "factoryPlanner", factoryId: "factory_ref", factoryName: "Рефтинская", status: "active", lastActivityAt: "сегодня 10:44 · просмотр дашборда" },
-  { id: "demo-2", fullName: "Ирина Волкова", login: "i.volkova", role: "hr", factoryId: "factory_ref", factoryName: "Рефтинская", status: "active", lastActivityAt: "сегодня 09:11 · обновила штат" },
-  { id: "demo-3", fullName: "Мария Орлова", login: "m.orlova", role: "directorOutsourcing", factoryId: "factory_ref", factoryName: "Рефтинская", status: "active", lastActivityAt: "вчера 16:20 · согласование" },
-  { id: "demo-4", fullName: "Дмитрий Соколов", login: "d.sokolov", role: "factoryMaster", factoryId: "factory_ref", factoryName: "Рефтинская", status: "active", lastActivityAt: "вчера 08:34 · факт выхода" },
-  { id: "demo-5", fullName: "Сергей Никифоров", login: "s.nikiforov", role: "admin", factoryId: "factory_ref", factoryName: "Рефтинская", status: "inactive", lastActivityAt: "26.06 18:02 · блокировка" }
-];
-
 function formatActivity(value: AdminUserRow["lastActivityAt"]) {
   if (!value) return "—";
   if (value instanceof Date) return value.toLocaleString("ru-RU");
@@ -25,7 +17,6 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [fallback, setFallback] = useState(false);
   const { notify } = useUiFeedback();
   const showNextIteration = (action: string) => notify(`${action} будет доступно в следующей итерации.`, "warning");
 
@@ -35,10 +26,9 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
     try {
       const rows = await api.adminUsers();
       setUsers(rows);
-      setFallback(false);
+      setError("");
     } catch (err) {
-      setUsers(demoUsers);
-      setFallback(true);
+      setUsers([]);
       setError(err instanceof Error ? err.message : "Admin users endpoint недоступен");
     } finally {
       setLoading(false);
@@ -85,8 +75,6 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
         </div>
       </section>
 
-      {fallback && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800">Показан demo fallback: {error}</div>}
-
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-black text-refDark">Пользователи</h2>
@@ -97,6 +85,8 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
         </div>
         {loading && !users.length ? (
           <div className="h-80 animate-pulse rounded-lg bg-slate-100" />
+        ) : error ? (
+          <Empty title="Нет данных пользователей" text={error} />
         ) : users.length ? (
           <div className="overflow-x-auto rounded-md border border-slate-200">
             <table className="min-w-[920px] w-full border-collapse text-left text-sm">

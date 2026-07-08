@@ -17,12 +17,16 @@ export function Dashboard({ data }: { data: BootstrapData }) {
       </div>
       <Panel title="Статусы планов" icon={<CalendarDays size={18} />}>
         <div className="grid gap-2 md:grid-cols-2">
-          {Array.from(new Map(data.plans.map((plan) => [plan.status, data.plans.filter((item) => item.status === plan.status).length]))).map(([status, count]) => (
-            <div key={status} className="flex items-center justify-between rounded-md bg-slate-50 p-3">
-              <span className={`text-sm font-black ${statusTone(status)}`}>{status}</span>
-              <span className="text-lg font-black">{count}</span>
-            </div>
-          ))}
+          {data.plans.length ? (
+            Array.from(new Map(data.plans.map((plan) => [plan.status, data.plans.filter((item) => item.status === plan.status).length]))).map(([status, count]) => (
+              <div key={status} className="flex items-center justify-between rounded-md bg-slate-50 p-3">
+                <span className={`text-sm font-black ${statusTone(status)}`}>{status}</span>
+                <span className="text-lg font-black">{count}</span>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-md bg-slate-50 p-3 text-sm font-black text-slate-500 md:col-span-2">Нет данных</p>
+          )}
         </div>
       </Panel>
     </div>
