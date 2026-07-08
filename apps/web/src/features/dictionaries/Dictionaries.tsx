@@ -1,6 +1,6 @@
 import { Archive, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
-import type { BootstrapData, Section } from "../../api/client";
+import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
 import { Empty } from "../../components/common";
 import { useUiFeedback } from "../../ui/feedback";
@@ -12,7 +12,9 @@ type SectionDraft = {
 
 export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: BootstrapMutate }) {
   const [name, setName] = useState("");
+  const [operationName, setOperationName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingOperation, setSavingOperation] = useState(false);
   const [savingSectionId, setSavingSectionId] = useState("");
   const [editingSectionId, setEditingSectionId] = useState("");
   const [sectionDraft, setSectionDraft] = useState<SectionDraft>({ name: "", order: "0" });
@@ -23,6 +25,11 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
     return left.name.localeCompare(right.name, "ru");
   });
   const activeCount = sections.filter((section) => section.active).length;
+  const operationCatalog = [...(data.operationCatalog || [])].sort((left, right) => {
+    if (left.active !== right.active) return left.active ? -1 : 1;
+    return left.name.localeCompare(right.name, "ru");
+  });
+  const activeOperationCount = operationCatalog.filter((operation) => operation.active).length;
 
   const createSection = async () => {
     const normalized = name.trim();
@@ -39,6 +46,50 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
     } finally {
       setSaving(false);
     }
+  };
+
+  const createOperation = async () => {
+    const normalized = operationName.trim();
+    if (!normalized) {
+      notify("Введите название операции.", "warning");
+      return;
+    }
+    if (savingOperation) return;
+    setSavingOperation(true);
+    try {
+      const next = await mutate("/operation-catalog", "POST", { name: normalized, active: true }, "Операция добавлена");
+      if (next) setOperationName("");
+    } finally {
+      setSavingOperation(false);
+    }
+  };
+
+  const removeOperation = async (operation: OperationCatalogItem) => {
+    const used = operation.operation_count || 0;
+    if (used > 0) {
+      if (!operation.active) {
+        notify(`Операция уже в архиве и используется в ${used} строках плана.`, "warning");
+        return;
+      }
+      const archive = await confirm({
+        title: "Операция используется",
+        message: `Операция используется в ${used} строках плана. Перевести в архив?`,
+        confirmLabel: "В архив",
+        cancelLabel: "Оставить",
+        tone: "warning"
+      });
+      if (archive) await mutate(`/operation-catalog/${operation.id}`, "PUT", { active: false }, "Операция переведена в архив");
+      return;
+    }
+
+    const remove = await confirm({
+      title: "Удалить операцию?",
+      message: `Удалить операцию "${operation.name}"?`,
+      confirmLabel: "Удалить",
+      cancelLabel: "Отмена",
+      tone: "error"
+    });
+    if (remove) await mutate(`/operation-catalog/${operation.id}`, "DELETE", undefined, "Операция удалена");
   };
 
   const removeSection = async (section: Section) => {
@@ -108,7 +159,7 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black">Справочники</h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">Участки фабрики: {activeCount} активных из {sections.length}</p>
+          <p className="mt-1 text-sm font-bold text-slate-500">Участки: {activeCount} активных из {sections.length} · Операции: {activeOperationCount} активных из {operationCatalog.length}</p>
         </div>
       </div>
 
@@ -132,7 +183,57 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
         </div>
       </section>
 
+      <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <label className="text-sm font-black text-slate-600">
+            Новая операция
+            <input
+              className="field mt-1"
+              value={operationName}
+              onChange={(event) => setOperationName(event.target.value)}
+              placeholder="Название операции"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void createOperation();
+              }}
+            />
+          </label>
+          <button className="btn-primary h-11 self-end gap-2 disabled:bg-slate-300" disabled={savingOperation} onClick={createOperation}>
+            <Plus size={17} /> Добавить
+          </button>
+        </div>
+      </section>
+
       <section className="space-y-2">
+        <h3 className="text-base font-black">Операции</h3>
+        {operationCatalog.map((operation) => {
+          const used = operation.operation_count || 0;
+          return (
+            <div key={operation.id} className={`grid gap-3 rounded-md border p-3 shadow-sm lg:grid-cols-[1fr_auto] lg:items-center ${operation.active ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100 text-slate-500"}`}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="min-w-0 truncate text-sm font-black text-refDark">{operation.name}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${operation.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>
+                    {operation.active ? "активна" : "архив"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs font-bold text-slate-500">Строк плана: {used}</p>
+              </div>
+              <button
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-md px-3 text-sm font-black ${used > 0 && operation.active ? "bg-orange-500 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
+                onClick={() => removeOperation(operation)}
+                title={used > 0 && operation.active ? "Перевести в архив" : "Удалить операцию"}
+              >
+                {used > 0 && operation.active ? <Archive size={17} /> : <Trash2 size={17} />}
+                {used > 0 && operation.active ? "В архив" : "Удалить"}
+              </button>
+            </div>
+          );
+        })}
+        {!operationCatalog.length && <Empty title="Операций пока нет" text="Добавьте операции, чтобы выбирать их при создании плана." />}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-base font-black">Участки</h3>
         {sections.map((section) => {
           const used = section.operation_count || 0;
           const editing = editingSectionId === section.id;

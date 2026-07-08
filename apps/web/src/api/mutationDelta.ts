@@ -10,6 +10,7 @@ import type {
   HousingPlace,
   MutationDelta,
   Operation,
+  OperationCatalogItem,
   Plan,
   Reservation,
   Room,
@@ -187,6 +188,21 @@ export function applyMutationDelta(current: BootstrapData, delta: MutationDelta,
           operations: [...operations, ...next.operations.filter((operation) => !operations.some((item) => item.id === operation.id))]
         };
       }
+    }
+  }
+
+  if (delta.resource === "operationCatalog") {
+    if (delta.action === "deleted" && id) {
+      next = { ...next, operationCatalog: (next.operationCatalog || []).filter((operation) => operation.id !== id) };
+    } else if (delta.data) {
+      const catalogItem = delta.data as OperationCatalogItem;
+      next = {
+        ...next,
+        operationCatalog: upsertById(next.operationCatalog || [], catalogItem),
+        operations: next.operations.map((operation) => operation.operation_id === catalogItem.id
+          ? { ...operation, name: catalogItem.name }
+          : operation)
+      };
     }
   }
 

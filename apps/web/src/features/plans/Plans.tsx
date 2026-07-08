@@ -26,6 +26,7 @@ function createDraftOperation(sectionOrder: number, planId = NEW_PLAN_ID): Opera
   return {
     id: `draft-operation-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     plan_id: planId,
+    operation_id: undefined,
     section_id: undefined,
     section_name: "",
     section_order: sectionOrder,
@@ -90,6 +91,7 @@ function operationCreatePayload(row: Operation) {
   const staff = numberValue(row.staff_count);
   return {
     section_id: row.section_id,
+    operation_id: row.operation_id,
     section_name: row.section_name,
     section_order: numberValue(row.section_order, 99),
     name: row.name,
@@ -102,6 +104,10 @@ function operationCreatePayload(row: Operation) {
 
 function missingSectionRows(rows: Operation[]) {
   return rows.filter((row) => !row.section_id);
+}
+
+function missingOperationRows(rows: Operation[]) {
+  return rows.filter((row) => !row.operation_id);
 }
 
 function isDraftOperation(row: Operation) {
@@ -208,8 +214,8 @@ function NewPlanDetail({ data, mutate, back }: { data: BootstrapData; mutate: Bo
 
   const save = async () => {
     if (saving) return;
-    if (missingSectionRows(drafts).length) {
-      notify("Выберите участок из справочника", "warning");
+    if (missingSectionRows(drafts).length || missingOperationRows(drafts).length) {
+      notify("Выберите участок и операцию из справочников", "warning");
       return;
     }
     setSaving(true);
@@ -237,9 +243,9 @@ function NewPlanDetail({ data, mutate, back }: { data: BootstrapData; mutate: Bo
       <PlanEditor
         kind="factory"
         sections={data.sections || []}
+        operationCatalog={data.operationCatalog || []}
         drafts={drafts}
         setDrafts={setDrafts}
-        mutate={mutate}
         onAddOperation={() => setDrafts([...drafts, createDraftOperation(drafts.length + 1)])}
       />
       <div className="mt-2 flex items-center justify-end gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
@@ -314,8 +320,8 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const sendKind = sendKindForPlan(editAccess, plan);
 
   const save = async () => {
-    if (editAccess.factory && missingSectionRows(drafts).length) {
-      notify("Выберите участок из справочника", "warning");
+    if (editAccess.factory && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
+      notify("Выберите участок и операцию из справочников", "warning");
       return;
     }
     if (editAccess.factory) {
@@ -328,7 +334,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       const path = isDraftOperation(row) ? "/operations" : `/operations/${row.id}`;
       await mutate(path, method, {
         ...(isDraftOperation(row) ? { plan_id: plan.id } : {}),
-        ...(editAccess.factory ? { name: row.name, section_id: row.section_id, required_staff: required } : {}),
+        ...(editAccess.factory ? { name: row.name, section_id: row.section_id, operation_id: row.operation_id, required_staff: required } : {}),
         ...(editAccess.hr ? { staff_count: staff, outsource_count: calculateOutsource(required, staff) } : {}),
         ...(editAccess.out ? { hours_per_day: numberValue(row.hours_per_day, 8), rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
       }, "Сохранено");
@@ -337,15 +343,15 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
 
   const send = async () => {
     if (!sendKind) return;
-    if (sendKind === "factory" && missingSectionRows(drafts).length) {
-      notify("Выберите участок из справочника", "warning");
+    if (sendKind === "factory" && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
+      notify("Выберите участок и операцию из справочников", "warning");
       return;
     }
     const invalidRows = drafts.flatMap((row) => {
       const missing: string[] = [];
       if (sendKind === "factory") {
         if (!row.section_id) missing.push("участок");
-        if (!row.name) missing.push("операция");
+        if (!row.operation_id) missing.push("операция");
         if (numberValue(row.required_staff) <= 0) missing.push("персонал");
       }
       if (sendKind === "out") {
@@ -410,7 +416,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       <PlanFlowNotice kind={kind} plan={plan} />
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
-        <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} drafts={drafts} setDrafts={setDrafts} mutate={mutate} planId={plan.id} />
+        <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} operationCatalog={data.operationCatalog || []} drafts={drafts} setDrafts={setDrafts} planId={plan.id} />
       ) : (
         <PlanTable kind={access.out ? "out" : kind} editAccess={{ factory: false, hr: false, out: access.out }} operations={operations} openOperation={openOperation} assignments={data.assignments} employees={data.employees} />
       )}
@@ -590,17 +596,8 @@ function PersonnelPicker({ data, assignedIds, period, select, close }: { data: B
   );
 }
 
-function PlanEditor({ kind, editAccess, sections = [], drafts, setDrafts, mutate, planId, onAddOperation }: { kind: PlanKind; editAccess?: PlanEditAccess; sections?: Section[]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; mutate?: BootstrapMutate; planId?: string; onAddOperation?: () => void }) {
+function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], drafts, setDrafts, planId, onAddOperation }: { kind: PlanKind; editAccess?: PlanEditAccess; sections?: Section[]; operationCatalog?: BootstrapData["operationCatalog"]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; planId?: string; onAddOperation?: () => void }) {
   const update = (id: string, patch: Partial<Operation>) => setDrafts(drafts.map((row) => row.id === id ? { ...row, ...patch } : row));
-  const createSection = async (name: string, rowId: string) => {
-    if (!mutate) return;
-    const nextOrder = sections.reduce((max, section) => Math.max(max, section.order || 0), 0) + 1;
-    const next = await mutate("/sections", "POST", { name, order: nextOrder, active: true }, "Участок добавлен");
-    const created = next?.sections.find((section) => section.name.toLowerCase() === name.toLowerCase());
-    if (created) {
-      update(rowId, { section_id: created.id, section_name: created.name, section_order: created.order });
-    }
-  };
   const addOperation = () => {
     if (onAddOperation) {
       onAddOperation();
@@ -610,7 +607,7 @@ function PlanEditor({ kind, editAccess, sections = [], drafts, setDrafts, mutate
   };
   return (
     <div className="space-y-3">
-      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} edit onChange={(patch) => update(row.id, patch)} onCreateSection={createSection} />)}
+      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} />)}
       {(editAccess?.factory ?? kind === "factory") && (
         <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-white" onClick={addOperation}>
           <Plus size={16} className="inline" /> Операция

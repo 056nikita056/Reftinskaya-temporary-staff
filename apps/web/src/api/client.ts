@@ -38,6 +38,7 @@ export type {
   MutationDelta,
   NotificationItem,
   Operation,
+  OperationCatalogItem,
   Plan,
   RequestFactAnalyticsData,
   RequestFactAnalyticsQuery,
@@ -249,6 +250,7 @@ function isOffline() {
 function sanitizeBootstrapCache(data: BootstrapData): BootstrapData {
   return {
     ...data,
+    operationCatalog: (data.operationCatalog || []).map((operation) => ({ ...operation })),
     employees: data.employees.map((employee) => ({
       id: employee.id,
       full_name: employee.full_name,

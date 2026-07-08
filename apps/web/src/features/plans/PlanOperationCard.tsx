@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Plus } from "lucide-react";
-import type { Operation, Section } from "../../api/client";
+import type { Operation, OperationCatalogItem, Section } from "../../api/client";
 import type { PlanKind } from "../../domain/types";
 import { calculateOutsource, displayOperationName, displaySectionName, numberValue } from "../../domain/display";
 
@@ -10,7 +9,7 @@ export type PlanEditAccess = {
   out: boolean;
 };
 
-export function PlanOperationCard({ kind, row, sections = [], assigned = [], edit, editAccess, onChange, onCreateSection, onOpen }: { kind: PlanKind; row: Operation; sections?: Section[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onCreateSection?: (name: string, rowId: string) => Promise<void>; onOpen?: () => void }) {
+export function PlanOperationCard({ kind, row, sections = [], operationCatalog = [], assigned = [], edit, editAccess, onChange, onOpen }: { kind: PlanKind; row: Operation; sections?: Section[]; operationCatalog?: OperationCatalogItem[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onOpen?: () => void }) {
   const [sectionQuery, setSectionQuery] = useState("");
   const required = numberValue(row.required_staff);
   const staff = numberValue(row.staff_count);
@@ -24,7 +23,7 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
   const normalizedSectionQuery = sectionQuery.trim();
   const selectableSections = sections.filter((section) => section.active || section.id === row.section_id);
   const visibleSections = selectableSections.filter((section) => section.name.toLowerCase().includes(normalizedSectionQuery.toLowerCase()));
-  const canCreateSection = Boolean(onCreateSection && normalizedSectionQuery && !sections.some((section) => section.name.toLowerCase() === normalizedSectionQuery.toLowerCase()));
+  const selectableOperations = operationCatalog.filter((operation) => operation.active || operation.id === row.operation_id);
   const selectSection = (sectionId: string) => {
     const section = sections.find((item) => item.id === sectionId);
     update({
@@ -33,10 +32,12 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
       section_order: section?.order ?? row.section_order
     });
   };
-  const createSection = async () => {
-    if (!canCreateSection || !onCreateSection) return;
-    await onCreateSection(normalizedSectionQuery, row.id);
-    setSectionQuery("");
+  const selectOperation = (operationId: string) => {
+    const operation = operationCatalog.find((item) => item.id === operationId);
+    update({
+      operation_id: operation?.id || undefined,
+      name: operation?.name || ""
+    });
   };
   const open = () => {
     if (canOpen) onOpen?.();
@@ -59,23 +60,12 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
         {canEditFactory ? (
           <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
             <div className="grid min-w-0 gap-1">
-              <div className="grid grid-cols-[1fr_2rem] gap-1">
-                <input
-                  className="h-8 min-w-0 rounded bg-slate-100 px-2 text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
-                  value={sectionQuery}
-                  placeholder="Поиск участка"
-                  onChange={(event) => setSectionQuery(event.target.value)}
-                />
-                <button
-                  className="inline-flex h-8 w-8 items-center justify-center rounded bg-orange-500 text-white disabled:bg-slate-300"
-                  disabled={!canCreateSection}
-                  onClick={createSection}
-                  title="Добавить участок"
-                  type="button"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
+              <input
+                className="h-8 min-w-0 rounded bg-slate-100 px-2 text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
+                value={sectionQuery}
+                placeholder="Поиск участка"
+                onChange={(event) => setSectionQuery(event.target.value)}
+              />
               <select
                 className="h-8 min-w-0 rounded bg-slate-100 px-2 text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
                 value={row.section_id || ""}
@@ -87,12 +77,16 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
                 ))}
               </select>
             </div>
-            <input
+            <select
               className="h-8 min-w-0 rounded bg-slate-100 px-2 text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
-              value={row.name}
-              placeholder="Операция без названия"
-              onChange={(event) => update({ name: event.target.value })}
-            />
+              value={row.operation_id || ""}
+              onChange={(event) => selectOperation(event.target.value)}
+            >
+              <option value="">Операция</option>
+              {selectableOperations.map((operation) => (
+                <option key={operation.id} value={operation.id}>{operation.name}</option>
+              ))}
+            </select>
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2">

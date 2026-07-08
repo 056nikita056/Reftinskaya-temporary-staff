@@ -8,25 +8,29 @@ datasource db {
 }
 
 model Factory {
-  id            String        @id @default(uuid()) @db.Uuid
-  name          String        @db.VarChar(255)
-  timezone      String        @default("Asia/Yekaterinburg") @db.VarChar(64)
-  theme         Json?
-  active        Boolean       @default(true)
-  outsourcers   Outsourcer[]
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String          @db.VarChar(255)
+  timezone       String          @default("Asia/Yekaterinburg") @db.VarChar(64)
+  theme          Json?
+  active         Boolean         @default(true)
+  outsourcers    Outsourcer[]
   usersFactories UsersFactory[]
-  auditLogs     AuditLog[]
+  territories    TerritoryTree[]
+  plans          Plan[]
+  auditLogs      AuditLog[]
+
   @@map("factories")
 }
 
 model Outsourcer {
-  id            String        @id @default(uuid()) @db.Uuid
-  factoryId     String        @map("factory_id") @db.Uuid
-  name          String        @db.VarChar(255)
-  externalRef   String?       @map("external_ref") @db.VarChar(128)
-  active        Boolean       @default(true)
-  factory       Factory       @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  id             String         @id @default(uuid()) @db.Uuid
+  factoryId      String         @map("factory_id") @db.Uuid
+  name           String         @db.VarChar(255)
+  externalRef    String?        @map("external_ref") @db.VarChar(128)
+  active         Boolean        @default(true)
+  factory        Factory        @relation(fields: [factoryId], references: [id], onDelete: Restrict)
   usersFactories UsersFactory[]
+
   @@unique([factoryId, name])
   @@index([factoryId])
   @@map("outsourcers")
@@ -38,6 +42,7 @@ model Role {
   name       String      @db.VarChar(255)
   active     Boolean     @default(true)
   usersRoles UsersRole[]
+
   @@map("roles")
 }
 
@@ -54,10 +59,104 @@ model User {
   profile             UserProfile?
   usersFactories      UsersFactory[]
   usersRoles          UsersRole[]
+  createdPlans        Plan[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   auditLogs           AuditLog[]
+
   @@map("users")
+}
+
+model Plan {
+  id              String          @id @default(uuid()) @db.Uuid
+  factoryId       String          @map("factory_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Date
+  createdByUserId String          @map("created_by_user_id") @db.Uuid
+  startDate       DateTime        @map("start_date") @db.Date
+  endDate         DateTime        @map("end_date") @db.Date
+  statusId        String          @default("00000000-0000-0000-0000-000000000001") @map("status_id") @db.Uuid
+  factory         Factory         @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  createdByUser   User            @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  status          PlanStatus      @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  operations      PlanOperation[]
+
+  @@index([factoryId, startDate, endDate])
+  @@index([createdByUserId])
+  @@index([statusId])
+  @@map("plans")
+}
+
+model PlanOperation {
+  id               String        @id @default(uuid()) @db.Uuid
+  planId           String        @map("plan_id") @db.Uuid
+  territoryId      String        @map("territories_id") @db.Uuid
+  operationId      String        @map("operation_id") @db.Uuid
+  requiredCount    Int           @map("required_count")
+  staffCount       Int?          @map("staff_count")
+  outsourcingCount Int?          @map("outsourcing_count")
+  hourlyPay        Decimal?      @map("hourly_pay") @db.Decimal(12, 2)
+  plan             Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  territory        TerritoryTree @relation(fields: [territoryId], references: [id], onDelete: Restrict)
+  operation        Operation     @relation(fields: [operationId], references: [id], onDelete: Restrict)
+
+  @@unique([planId, territoryId, operationId])
+  @@index([territoryId])
+  @@index([operationId])
+  @@map("plan_operations")
+}
+
+model PlanStatus {
+  id     String  @id @default(uuid()) @db.Uuid
+  code   String  @unique @db.VarChar(64)
+  title  String  @db.VarChar(160)
+  active Boolean @default(true)
+  plans  Plan[]
+
+  @@map("plan_statuses")
+}
+
+model PriceList {
+  id          String        @id @default(uuid()) @db.Uuid
+  operationId String        @map("operation_id") @db.Uuid
+  sectionId   String        @map("section_id") @db.Uuid
+  cost        Float
+  dateApplied DateTime?     @map("date_applyed") @db.Date
+  operation   Operation     @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  section     TerritoryTree @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  @@index([operationId])
+  @@index([sectionId])
+  @@index([dateApplied])
+  @@map("price_list")
+}
+
+model TerritoryTree {
+  id             String          @id @default(uuid()) @db.Uuid
+  factoryId      String          @map("factory_id") @db.Uuid
+  name           String
+  parentId       String?         @map("parent_id") @db.Uuid
+  isFolder       Boolean?        @map("is_folder")
+  active         Boolean         @default(true)
+  factory        Factory         @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  parent         TerritoryTree?  @relation("TerritoryTreeChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children       TerritoryTree[] @relation("TerritoryTreeChildren")
+  planOperations PlanOperation[]
+  prices         PriceList[]
+
+  @@index([factoryId])
+  @@index([factoryId, parentId])
+  @@index([parentId])
+  @@map("territories_tree")
+}
+
+model Operation {
+  id             String          @id @default(uuid()) @db.Uuid
+  name           String          @db.VarChar(255)
+  active         Boolean         @default(true)
+  planOperations PlanOperation[]
+  prices         PriceList[]
+
+  @@map("operations")
 }
 
 model UserProfile {
@@ -69,6 +168,7 @@ model UserProfile {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("user_profiles")
 }
 
@@ -81,6 +181,7 @@ model UsersFactory {
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   factory      Factory     @relation(fields: [factoryId], references: [id], onDelete: Restrict)
   outsourcer   Outsourcer? @relation(fields: [outsourcerId], references: [id], onDelete: Restrict)
+
   @@id([userId, factoryId])
   @@index([factoryId])
   @@index([outsourcerId])
@@ -92,6 +193,7 @@ model UsersRole {
   roleId String @map("role_id") @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   role   Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
   @@id([userId, roleId])
   @@index([roleId])
   @@map("users_roles")
@@ -107,6 +209,7 @@ model RefreshToken {
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, revokedAt, expiresAt])
   @@index([familyId, revokedAt, expiresAt])
   @@map("refresh_tokens")
@@ -120,6 +223,7 @@ model PasswordResetToken {
   usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("password_reset_tokens")
 }
@@ -136,6 +240,7 @@ model AuditLog {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   factory   Factory? @relation(fields: [factoryId], references: [id], onDelete: SetNull)
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([factoryId, createdAt])
   @@index([userId, createdAt])
   @@index([entity, entityId])

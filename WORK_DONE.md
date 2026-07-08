@@ -84,6 +84,32 @@ admin                 -> Администратор: учетные записи
 
 Планы теперь учитывают не одну выбранную роль, а набор прав пользователя.
 
+Подготовлена нормальная SQL/Prisma-схема для хранения планов:
+
+```text
+plans
+plan_operations
+plan_statuses
+price_list
+territories_tree
+operations
+```
+
+В `plans` добавлено `factory_id`, чтобы планы не смешивались между фабриками. Статусы планов хранятся в `plan_statuses`, статус `draft` имеет дефолтный UUID для новых планов.
+
+`compat` API для планов переведен на PostgreSQL:
+
+```text
+POST/PUT/DELETE /compat/plans      -> plans + plan_operations
+POST/PUT/DELETE /compat/operations -> plan_operations
+POST/PUT/DELETE /compat/sections   -> territories_tree
+POST/PUT/DELETE /compat/operation-catalog -> operations
+```
+
+Frontend по-прежнему получает совместимый формат `plans`, `sections`, `operations`, но данные уже собираются из новых таблиц. Поле `operations` в bootstrap осталось строками плана, а справочник видов работ добавлен отдельным полем `operationCatalog`.
+
+В форме плана участок и операция выбираются из справочников. Ручной ввод названия операции убран.
+
 Текущий этап плана определяется по статусу:
 
 ```text

@@ -128,6 +128,7 @@ export type Plan = {
 export type Operation = {
   id: string;
   plan_id: string;
+  operation_id?: string | null;
   section_id?: string | null;
   section_name: string;
   section_order: number;
@@ -142,6 +143,13 @@ export type Operation = {
   hours_per_day: number;
   rate_per_hour: number;
   assigned_count?: number;
+};
+
+export type OperationCatalogItem = {
+  id: string;
+  name: string;
+  active: boolean;
+  operation_count?: number;
 };
 
 export type Section = {
@@ -279,6 +287,7 @@ export type BootstrapQuery = {
 export type BootstrapData = {
   plans: Plan[];
   sections: Section[];
+  operationCatalog?: OperationCatalogItem[];
   operations: Operation[];
   employees: Employee[];
   employeeBusy: EmployeeBusy[];
@@ -311,7 +320,7 @@ export type BootstrapData = {
 };
 
 export type MutationAction = "created" | "updated" | "deleted" | "upserted";
-export type MutationResource = "plans" | "sections" | "operations" | "employees" | "assignments" | "housingDorms" | "reservations" | "facts" | "explanations" | "settings";
+export type MutationResource = "plans" | "sections" | "operationCatalog" | "operations" | "employees" | "assignments" | "housingDorms" | "reservations" | "facts" | "explanations" | "settings";
 
 export type MutationDelta = {
   ok: true;

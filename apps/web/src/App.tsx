@@ -270,7 +270,6 @@ export function App() {
           <section className="min-w-0 px-3 pb-24 pt-4 md:px-6 lg:px-10 lg:py-8">
             <Workspace
               role={role}
-              roles={roles}
               access={access}
               active={active}
               view={view}
@@ -508,7 +507,6 @@ function MobileNav({ modules, active, setActive }: { modules: ModuleKey[]; activ
 
 function Workspace({
   role,
-  roles,
   access,
   active,
   view,
@@ -525,7 +523,6 @@ function Workspace({
   legacyEnabled
 }: {
   role: RoleKey;
-  roles: RoleKey[];
   access: RoleAccess;
   active: ModuleKey;
   view: ViewState;

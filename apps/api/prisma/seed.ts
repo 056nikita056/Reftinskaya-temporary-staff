@@ -17,6 +17,15 @@ const roles = [
   ["admin", "Администратор"]
 ] as const;
 
+const planStatuses = [
+  ["00000000-0000-0000-0000-000000000001", "draft", "В доработке"],
+  ["00000000-0000-0000-0000-000000000002", "submitted_to_hr", "Отправлено"],
+  ["00000000-0000-0000-0000-000000000003", "received_by_outsourcer", "Получено"],
+  ["00000000-0000-0000-0000-000000000004", "on_approval", "На согласовании"],
+  ["00000000-0000-0000-0000-000000000005", "approved", "На очереди"],
+  ["00000000-0000-0000-0000-000000000006", "rejected", "Не утверждено"]
+] as const;
+
 async function upsertDemoFactory() {
   const existingFactory = await prisma.factory.findFirst({
     where: { name: "Рефтинская" }
@@ -42,6 +51,24 @@ async function upsertDemoFactory() {
 }
 
 async function main(): Promise<void> {
+  await Promise.all(
+    planStatuses.map(([id, code, title]) =>
+      prisma.planStatus.upsert({
+        where: { code },
+        update: {
+          title,
+          active: true
+        },
+        create: {
+          id,
+          code,
+          title,
+          active: true
+        }
+      })
+    )
+  );
+
   const roleRecords = await Promise.all(
     roles.map(([code, name]) =>
       prisma.role.upsert({
