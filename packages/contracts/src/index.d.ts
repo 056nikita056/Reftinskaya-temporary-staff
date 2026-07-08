@@ -29,6 +29,7 @@ export type AccessAction =
   | "plans.factory.edit"
   | "plans.hr.edit"
   | "plans.out.edit"
+  | "plans.out.approve"
   | "personnel.view"
   | "personnel.edit"
   | "housing.view"

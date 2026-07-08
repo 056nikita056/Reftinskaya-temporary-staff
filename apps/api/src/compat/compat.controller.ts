@@ -360,7 +360,8 @@ function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
     if (status === "Отправлено") actions.add("plans.factory.edit");
     else if (status === "Получено") actions.add("plans.hr.edit");
     else if (status === "На согласовании") actions.add("plans.out.edit");
-    else if (status === "На очереди" || status === "Не утверждено" || status === "В доработке") actions.add("plans.factory.edit");
+    else if (status === "На очереди" || status === "Не утверждено") actions.add("plans.out.approve");
+    else if (status === "В доработке") actions.add("plans.factory.edit");
     else {
       throw new BadRequestException({
         code: "UNSUPPORTED_PLAN_STATUS",

@@ -3,17 +3,17 @@ import type { RoleKey } from "../api/client";
 import type { ModuleKey, RoleOption } from "./types";
 
 const roleMeta: Record<RoleKey, Pick<RoleOption, "label" | "description">> = {
-  factoryPlanner: { label: "Планировщик фабрики", description: "Планирует заявки и видит аналитику" },
-  hr: { label: "HR", description: "Ведет штатную часть и видит аналитику" },
-  directorOutsourcing: { label: "Директор аутсорсинга", description: "Смотрит управленческую аналитику" },
-  outsourcer: { label: "Аутсорсер", description: "Распределяет людей и жилье" },
-  outsourcerBrigadier: { label: "Бригадир аутсорсера", description: "Фиксирует факт со стороны аутсорсера" },
-  hrOutsourcer: { label: "HR аутсорсера", description: "Ведет персонал аутсорсера" },
-  warden: { label: "Комендант", description: "Ведет проживание" },
-  factoryMaster: { label: "Мастер фабрики", description: "Фиксирует факт работ фабрики" },
-  outMaster: { label: "Мастер аутсорсера", description: "Фиксирует факт работ аутсорсера" },
-  tempEmployee: { label: "Временный сотрудник", description: "Получает уведомления и профиль" },
-  admin: { label: "Администратор", description: "Управляет пользователями и доступами" }
+  factoryPlanner: { label: "Директор по производству", description: "Создает планы численности на свои участки и отправляет HR" },
+  hr: { label: "HR-специалист фабрики", description: "Проставляет штат, считает аутсорсинг и отправляет аутсорсеру" },
+  directorOutsourcing: { label: "Директор по аутсорсингу", description: "Контролирует планы в режиме просмотра" },
+  outsourcer: { label: "Менеджер аутсорсера", description: "Распределяет персонал по операциям и отправляет на согласование" },
+  outsourcerBrigadier: { label: "Бригадир аутсорсера", description: "Согласует план аутсорсера" },
+  hrOutsourcer: { label: "HR-специалист аутсорсера", description: "Ведет базу персонала, документы и архив" },
+  warden: { label: "Комендант", description: "Ведет проживание, шахматку и бронирование" },
+  factoryMaster: { label: "Мастер фабрики", description: "Фиксирует факт на своих участках" },
+  outMaster: { label: "Мастер аутсорсера", description: "Фиксирует факт в ограниченном режиме" },
+  tempEmployee: { label: "Временный сотрудник", description: "Видит свой профиль" },
+  admin: { label: "Администратор", description: "Управляет учетками, ролями, справочниками и настройками" }
 };
 
 const roleOrder: RoleKey[] = [

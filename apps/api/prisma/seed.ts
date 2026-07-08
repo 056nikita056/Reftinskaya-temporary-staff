@@ -4,12 +4,12 @@ import bcrypt from "bcrypt";
 const prisma = new PrismaClient();
 
 const roles = [
-  ["factoryPlanner", "Планировщик фабрики"],
-  ["hr", "HR фабрики"],
-  ["directorOutsourcing", "Директор аутсорсинга"],
+  ["factoryPlanner", "Директор по производству"],
+  ["hr", "HR-специалист фабрики"],
+  ["directorOutsourcing", "Директор по аутсорсингу"],
   ["outsourcer", "Менеджер аутсорсера"],
   ["outsourcerBrigadier", "Бригадир аутсорсера"],
-  ["hrOutsourcer", "HR аутсорсера"],
+  ["hrOutsourcer", "HR-специалист аутсорсера"],
   ["warden", "Комендант"],
   ["factoryMaster", "Мастер фабрики"],
   ["outMaster", "Мастер аутсорсера"],

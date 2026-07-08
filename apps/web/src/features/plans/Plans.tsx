@@ -10,9 +10,11 @@ import { useUiFeedback } from "../../ui/feedback";
 const NEW_PLAN_ID = "__new-plan__";
 
 type PlanAccess = {
+  view: boolean;
   factory: boolean;
   hr: boolean;
   out: boolean;
+  outApprove: boolean;
 };
 
 type NewPlanDraft = {
@@ -46,18 +48,21 @@ function createNewPlanDraft(): NewPlanDraft {
 
 function planAccessForPermissions(access: RoleAccess): PlanAccess {
   return {
+    view: access.actions.includes("plans.view"),
     factory: access.actions.includes("plans.factory.edit"),
     hr: access.actions.includes("plans.hr.edit"),
-    out: access.actions.includes("plans.out.edit")
+    out: access.actions.includes("plans.out.edit"),
+    outApprove: access.actions.includes("plans.out.approve")
   };
 }
 
 function primaryKind(access: PlanAccess, fallbackRole: RoleKey): PlanKind {
   if (fallbackRole === "hr" && access.hr) return "hr";
   if (fallbackRole === "outsourcer" && access.out) return "out";
+  if (fallbackRole === "outsourcerBrigadier" && access.outApprove) return "out";
   if (access.factory) return "factory";
   if (access.hr) return "hr";
-  if (access.out) return "out";
+  if (access.out || access.outApprove) return "out";
   return "factory";
 }
 
@@ -120,6 +125,8 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
     if (access.factory && plan.owner_role === "factory") return true;
     if (access.hr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
     if (access.out) return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+    if (access.outApprove) return plan.owner_role === "factory" && ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+    if (access.view) return plan.owner_role === "factory";
     return false;
   });
 
@@ -372,11 +379,11 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
 
   const approveOutsourcePlan = async () => {
     if (!await confirm({
-      title: "Согласование фабрики",
+      title: "Согласование аутсорсера",
       message: "Утвердить распределение аутсорсера и передать план мастерам?",
       confirmLabel: "Утвердить"
     })) return;
-    await mutate(`/plans/${plan.id}`, "PUT", { status: "На очереди" }, "План утвержден фабрикой и передан мастерам");
+    await mutate(`/plans/${plan.id}`, "PUT", { status: "На очереди" }, "План утвержден и передан мастерам");
     back();
   };
 
@@ -416,7 +423,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
           </div>
         </div>
       )}
-      {!isEdit && kind === "factory" && plan.status === "На согласовании" && (
+      {!isEdit && access.outApprove && plan.status === "На согласовании" && (
         <div className="mt-2 grid gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 shadow-sm sm:grid-cols-2">
           <button className="h-11 rounded-md bg-orange-500 px-4 text-sm font-black text-white" onClick={returnOutsourcePlan}>
             Вернуть аутсорсеру

@@ -30,7 +30,7 @@ const ACCESS_POLICY = Object.freeze({
     ])
   }),
   hr: Object.freeze({
-    modules: Object.freeze(["dashboard", "plans", "personnel", ...BASE_MODULES]),
+    modules: Object.freeze(["dashboard", "plans", ...BASE_MODULES]),
     actions: Object.freeze([
       "dashboard.requestFactAnalytics.view",
       "notifications.view",
@@ -39,21 +39,20 @@ const ACCESS_POLICY = Object.freeze({
       "deviationReasons.edit",
       "plans.view",
       "plans.edit",
-      "plans.hr.edit",
-      "personnel.view"
+      "plans.hr.edit"
     ])
   }),
   directorOutsourcing: Object.freeze({
-    modules: Object.freeze(["dashboard", ...BASE_MODULES]),
-    actions: Object.freeze(["dashboard.requestFactAnalytics.view", "notifications.view", "profile.view"])
+    modules: Object.freeze(["dashboard", "plans", ...BASE_MODULES]),
+    actions: Object.freeze(["dashboard.requestFactAnalytics.view", "notifications.view", "profile.view", "plans.view"])
   }),
   outsourcer: Object.freeze({
-    modules: Object.freeze(["plans", "personnel", "housing", ...BASE_MODULES]),
-    actions: Object.freeze(["notifications.view", "profile.view", "plans.view", "plans.edit", "plans.out.edit", "personnel.view", "personnel.edit", "housing.view", "housing.edit"])
+    modules: Object.freeze(["plans", ...BASE_MODULES]),
+    actions: Object.freeze(["notifications.view", "profile.view", "plans.view", "plans.edit", "plans.out.edit"])
   }),
   outsourcerBrigadier: Object.freeze({
-    modules: Object.freeze(["facts", ...BASE_MODULES]),
-    actions: Object.freeze(["notifications.view", "profile.view", "facts.view", "facts.edit", "facts.out.edit"])
+    modules: Object.freeze(["plans", ...BASE_MODULES]),
+    actions: Object.freeze(["notifications.view", "profile.view", "plans.view", "plans.out.approve"])
   }),
   hrOutsourcer: Object.freeze({
     modules: Object.freeze(["personnel", ...BASE_MODULES]),
@@ -90,6 +89,7 @@ const ACCESS_POLICY = Object.freeze({
       "plans.factory.edit",
       "plans.hr.edit",
       "plans.out.edit",
+      "plans.out.approve",
       "personnel.view",
       "personnel.edit",
       "housing.view",
