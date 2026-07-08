@@ -314,6 +314,9 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [passwordChange, setPasswordChange] = useState<{ oldPassword: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
   const [pending, setPending] = useState<{
     response: LoginResponse;
     role: RoleKey;
@@ -322,25 +325,61 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
     factories: Factory[];
   } | null>(null);
 
+  const startSession = (result: LoginResponse) => {
+    const nextRole = result.user?.role || result.role;
+    const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : [nextRole];
+    const nextAccess = result.user?.access || result.permissions || accessForRoles(nextRoles);
+    const factories = (result.user?.factories?.length ? [...result.user.factories] : result.factories?.length ? [...result.factories] : [])
+      .filter((factory) => factory.active);
+    if (factories.length > 1) {
+      setPending({ response: result, role: nextRole, roles: nextRoles, access: nextAccess, factories });
+      return;
+    }
+    localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
+    onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id, result.user?.factory || result.factory);
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
     try {
       const result = await api.login(login, password);
-      const nextRole = result.user?.role || result.role;
-      const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : [nextRole];
-      const nextAccess = result.user?.access || result.permissions || accessForRoles(nextRoles);
-      const factories = (result.user?.factories?.length ? [...result.user.factories] : result.factories?.length ? [...result.factories] : [])
-        .filter((factory) => factory.active);
-      if (factories.length > 1) {
-        setPending({ response: result, role: nextRole, roles: nextRoles, access: nextAccess, factories });
+      if (result.mustChangePassword) {
+        setPasswordChange({ oldPassword: password });
+        setPassword("");
         return;
       }
-      localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
-      onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id, result.user?.factory || result.factory);
+      startSession(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось войти");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitPasswordChange = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!passwordChange || submitting) return;
+    setError("");
+    if (newPassword.length < 8) {
+      setError("Новый пароль должен быть минимум 8 символов");
+      return;
+    }
+    if (newPassword !== repeatPassword) {
+      setError("Пароли не совпадают");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.changePassword(passwordChange.oldPassword, newPassword);
+      const result = await api.login(login, newPassword);
+      setPasswordChange(null);
+      setNewPassword("");
+      setRepeatPassword("");
+      startSession(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сменить пароль");
     } finally {
       setSubmitting(false);
     }
@@ -370,11 +409,30 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
     api.logout().catch(() => undefined).finally(() => {
       clearAuthTokens();
       setPending(null);
+      setPasswordChange(null);
       setPassword("");
+      setNewPassword("");
+      setRepeatPassword("");
       setError("");
       setSubmitting(false);
     });
   };
+
+  if (passwordChange) {
+    return (
+      <PasswordChange
+        login={login}
+        newPassword={newPassword}
+        repeatPassword={repeatPassword}
+        submitting={submitting}
+        error={error}
+        setNewPassword={setNewPassword}
+        setRepeatPassword={setRepeatPassword}
+        onSubmit={submitPasswordChange}
+        onBack={backToLogin}
+      />
+    );
+  }
 
   if (pending) {
     return (
@@ -444,6 +502,54 @@ function FactoryChoice({ factories, selectedFactoryId, submitting, error, onSele
         </div>
         {error && <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
         <button className="mt-4 rounded-md bg-slate-200 px-4 py-2 text-sm font-black text-slate-700" disabled={submitting} onClick={onBack}>
+          Назад
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function PasswordChange({
+  login,
+  newPassword,
+  repeatPassword,
+  submitting,
+  error,
+  setNewPassword,
+  setRepeatPassword,
+  onSubmit,
+  onBack
+}: {
+  login: string;
+  newPassword: string;
+  repeatPassword: string;
+  submitting: boolean;
+  error: string;
+  setNewPassword: (value: string) => void;
+  setRepeatPassword: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  onBack: () => void;
+}) {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
+      <section className="w-full max-w-[390px] rounded-2xl bg-white p-6 shadow-panel">
+        <div className="mb-4 text-center">
+          <h1 className="text-2xl font-black leading-tight text-refDark">Смена пароля</h1>
+          <p className="mt-1 text-sm font-bold text-slate-500">{login}</p>
+        </div>
+        <form className="space-y-3" onSubmit={onSubmit}>
+          <label className="block">
+            <span className="mb-1 block text-xs font-black text-slate-500">Новый пароль</span>
+            <input className={`field ${error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" autoComplete="new-password" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-black text-slate-500">Повторите пароль</span>
+            <input className={`field ${error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`} value={repeatPassword} onChange={(event) => setRepeatPassword(event.target.value)} type="password" autoComplete="new-password" />
+          </label>
+          {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
+          <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Сохраняем..." : "Сменить пароль"}</button>
+        </form>
+        <button className="mt-3 w-full rounded-md bg-slate-200 px-4 py-2 text-sm font-black text-slate-700" disabled={submitting} onClick={onBack}>
           Назад
         </button>
       </section>

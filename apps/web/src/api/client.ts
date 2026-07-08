@@ -380,6 +380,9 @@ export const api = {
     }
     return { ...response, ok: true, role: response.user?.role || response.role };
   },
+  changePassword(oldPassword: string, newPassword: string) {
+    return coreRequest<{ ok: true }>("/auth/change-password", { method: "POST", body: { oldPassword, newPassword } });
+  },
   logout() {
     return coreRequest("/auth/logout", { method: "POST" }).finally(clearAuthTokens);
   },
