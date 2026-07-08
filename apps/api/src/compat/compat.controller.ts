@@ -48,7 +48,7 @@ export class CompatController {
         }
       : undefined;
     const permissions = accessForRoles(roles);
-    const planData = await this.loadPlanData(user.factoryId);
+    const planData = filterPlanDataForAccess(await this.loadPlanData(user.factoryId), permissions);
     const store = storeFor(user.factoryId);
 
     return {
@@ -734,6 +734,49 @@ function accessForRoles(roles: UserRole[]): RoleAccess {
     modules: [...modules],
     actions: [...actions]
   };
+}
+
+type BootstrapPlanData = Pick<BootstrapData, "plans" | "sections" | "operationCatalog" | "operations">;
+
+function filterPlanDataForAccess(planData: BootstrapPlanData, permissions: RoleAccess): BootstrapPlanData {
+  const visiblePlans = planData.plans.filter((plan) => canReadPlan(plan, permissions));
+  const visiblePlanIds = new Set(visiblePlans.map((plan) => plan.id));
+  return {
+    ...planData,
+    plans: visiblePlans,
+    operations: planData.operations.filter((operation) => visiblePlanIds.has(operation.plan_id))
+  };
+}
+
+function canReadPlan(plan: BootstrapData["plans"][number], permissions: RoleAccess): boolean {
+  const actions = permissions.actions;
+  const canEditFactory = actions.includes("plans.factory.edit");
+  const canEditHr = actions.includes("plans.hr.edit");
+  const canEditOut = actions.includes("plans.out.edit");
+  const canApproveOut = actions.includes("plans.out.approve");
+  if (canEditFactory && plan.owner_role === "factory") return true;
+  if (canEditHr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
+  if (
+    canEditOut &&
+    plan.owner_role === "factory" &&
+    ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) &&
+    planOutsourceNeed(plan) > 0
+  ) {
+    return true;
+  }
+  if (
+    canApproveOut &&
+    plan.owner_role === "factory" &&
+    ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) &&
+    planOutsourceNeed(plan) > 0
+  ) {
+    return true;
+  }
+  return actions.includes("plans.view") && !canEditFactory && !canEditHr && !canEditOut && !canApproveOut && plan.owner_role === "factory";
+}
+
+function planOutsourceNeed(plan: BootstrapData["plans"][number]): number {
+  return Math.max(0, numberValue(plan.required_staff) - numberValue(plan.staff_count));
 }
 
 function normalizeResource(resource: string): MutationResource {

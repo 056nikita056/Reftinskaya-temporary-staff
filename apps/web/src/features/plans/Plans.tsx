@@ -91,6 +91,14 @@ function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
   return plan.status;
 }
 
+function canReadPlan(plan: Plan, access: PlanAccess) {
+  if (access.factory && plan.owner_role === "factory") return true;
+  if (access.hr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
+  if (access.out) return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+  if (access.outApprove) return plan.owner_role === "factory" && ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+  return access.view && !access.factory && !access.hr && !access.out && !access.outApprove && plan.owner_role === "factory";
+}
+
 function operationCreatePayload(row: Operation) {
   const required = numberValue(row.required_staff);
   const staff = numberValue(row.staff_count);
@@ -132,14 +140,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   const access = planAccessForPermissions(permissions);
   const kind = primaryKind(access, role);
   const [creatingPlan, setCreatingPlan] = useState(false);
-  const visiblePlans = data.plans.filter((plan) => {
-    if (access.factory && plan.owner_role === "factory") return true;
-    if (access.hr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
-    if (access.out) return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
-    if (access.outApprove) return plan.owner_role === "factory" && ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
-    if (access.view) return plan.owner_role === "factory";
-    return false;
-  });
+  const visiblePlans = data.plans.filter((plan) => canReadPlan(plan, access));
 
   if (view.type === "plan") {
     return <PlanDetail kind={view.kind} access={access} edit={view.edit} planId={view.planId} data={data} mutate={mutate} back={() => setView({ type: "list" })} openEdit={() => setView({ type: "plan", kind: view.kind, planId: view.planId, edit: true })} openOperation={(operationId) => setView({ type: "assignment", planId: view.planId, operationId })} />;
