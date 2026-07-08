@@ -166,7 +166,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
                 <p className="font-black">План {planPeriod(plan)}</p>
                 <p className="mt-1 text-sm font-bold text-slate-600">Персонал: {plan.required_staff || 0} · Штат: {plan.staff_count || 0} · Аутсорсинг: {calculateOutsource(plan.required_staff, plan.staff_count)}</p>
               </div>
-              <span className={`text-xs font-black ${statusTone(plan.status)}`}>{kind === "hr" && plan.status === "Отправлено" ? "Получено" : plan.status}</span>
+              <span className={`text-xs font-black ${statusTone(plan.status)}`}>{plan.status}</span>
             </div>
           </button>
         ))}
@@ -318,6 +318,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const editable = hasEditAccess(editAccess);
   const isEdit = Boolean(edit && editable);
   const sendKind = sendKindForPlan(editAccess, plan);
+  const sendDirectlyToOutsource = plan.status === "В доработке" && Boolean(editAccess.factory && editAccess.hr);
 
   const save = async () => {
     if (editAccess.factory && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
@@ -375,11 +376,11 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         return;
       }
     }
-    const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
+    const question = sendDirectlyToOutsource ? "Отправить план Аутсорсеру?" : sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     await save();
-    const status = sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
-    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    const status = sendDirectlyToOutsource ? "Получено" : sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
+    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendDirectlyToOutsource ? "План отправлен аутсорсеру" : sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
     back();
   };
 

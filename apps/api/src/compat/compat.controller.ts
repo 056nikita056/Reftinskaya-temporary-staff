@@ -164,7 +164,7 @@ export class CompatController {
     const store = storeFor(user.factoryId);
     const roles = await this.requireCurrentRoles(user.sub);
     requireMutationAccess(roles, resource, "PUT", body, store);
-    if (resource === "plans") return this.updatePlan(user.factoryId, id, body);
+    if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles);
     if (resource === "sections") return this.updateSection(user.factoryId, id, body);
     if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
     if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body, roles);
@@ -308,14 +308,14 @@ export class CompatController {
     };
   }
 
-  private async updatePlan(factoryId: string, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
+  private async updatePlan(factoryId: string, id: string, body: Record<string, unknown>, roles: UserRole[]): Promise<MutationDelta> {
     const existing = await this.requirePlanWithStatus(factoryId, id);
     const data: Record<string, unknown> = {};
     if ("start_date" in body) data.startDate = parseApiDate(requiredString(body.start_date, "START_DATE_REQUIRED"));
     if ("end_date" in body) data.endDate = parseApiDate(requiredString(body.end_date, "END_DATE_REQUIRED"));
     if ("status" in body) {
       const nextStatus = await this.requireStatusByTitle(requiredString(body.status, "STATUS_REQUIRED"));
-      assertPlanStatusTransition(existing.status, nextStatus);
+      assertPlanStatusTransition(existing.status, nextStatus, roles);
       data.statusId = nextStatus.id;
     }
     const plan = await this.prisma.plan.update({
@@ -886,7 +886,7 @@ function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
   return [...actions];
 }
 
-function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }): void {
+function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }, roles: UserRole[] = []): void {
   if (current.code === next.code) return;
   const allowed: Record<string, string[]> = {
     draft: ["submitted_to_hr"],
@@ -896,6 +896,15 @@ function assertPlanStatusTransition(current: { code: string; title: string }, ne
     on_approval: ["approved", "rejected"],
     approved: []
   };
+  const permissions = accessForRoles(roles);
+  if (
+    current.code === "draft" &&
+    next.code === "received_by_outsourcer" &&
+    permissions.actions.includes("plans.factory.edit") &&
+    permissions.actions.includes("plans.hr.edit")
+  ) {
+    return;
+  }
   if (!allowed[current.code]?.includes(next.code)) {
     throw new BadRequestException({
       code: "INVALID_PLAN_STATUS_TRANSITION",
