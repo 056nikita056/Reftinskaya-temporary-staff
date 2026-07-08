@@ -17,7 +17,8 @@
     "prisma:generate": "npm --workspace apps/api run prisma:generate",
     "prisma:migrate:dev": "npm --workspace apps/api run prisma:migrate:dev",
     "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
-    "seed": "npm --workspace apps/api run seed"
+    "seed": "npm --workspace apps/api run seed",
+    "create:user": "node scripts/create-user.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

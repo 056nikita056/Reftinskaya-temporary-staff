@@ -5,6 +5,7 @@ export type AccessTokenPayload = {
   sub: string;
   factoryId: string;
   role: UserRole;
+  roles: UserRole[];
   login: string;
   fullName: string;
 };
@@ -30,6 +31,7 @@ export type ApiLoginResponse = {
     factoryId: string;
     login: string;
     role: UserRole;
+    roles: UserRole[];
     fullName: string;
     factory: {
       id: string;
@@ -38,6 +40,13 @@ export type ApiLoginResponse = {
       theme?: unknown;
       active: boolean;
     };
+    factories: Array<{
+      id: string;
+      name: string;
+      timezone: string;
+      theme?: unknown;
+      active: boolean;
+    }>;
     access: RoleAccess;
   };
   factory: {
@@ -47,6 +56,13 @@ export type ApiLoginResponse = {
     theme?: unknown;
     active: boolean;
   };
+  factories: Array<{
+    id: string;
+    name: string;
+    timezone: string;
+    theme?: unknown;
+    active: boolean;
+  }>;
   permissions: RoleAccess;
   mustChangePassword?: true;
 };

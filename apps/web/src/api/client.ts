@@ -388,8 +388,8 @@ export const api = {
       return DEMO_FACTORIES;
     }
   },
-  async login(login: string, password: string, factoryId?: string) {
-    const response = await coreRequest<LoginResponse>("/auth/login", { method: "POST", body: { login: login.trim(), password, factoryId }, auth: false });
+  async login(login: string, password: string) {
+    const response = await coreRequest<LoginResponse>("/auth/login", { method: "POST", body: { login: login.trim(), password }, auth: false });
     if (response.accessToken && response.refreshToken) {
       writeTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
       setStorageNamespace(response.user?.id);

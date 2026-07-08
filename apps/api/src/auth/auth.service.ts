@@ -1,12 +1,7 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException
-} from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { accessForRole, USER_ROLES, type Factory, type UserRole } from "@reftinskaya/contracts";
+import { accessForRole, USER_ROLES, type Factory, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
 import bcrypt from "bcrypt";
 import { randomBytes, randomUUID } from "node:crypto";
 
@@ -30,8 +25,22 @@ type RequestMeta = {
 type SessionContext = {
   payload: AccessTokenPayload;
   factory: Factory;
+  factories: Factory[];
   roles: UserRole[];
   mustChangePassword: boolean;
+};
+
+type FactoryMembership = {
+  factoryId: string;
+  active: boolean;
+  isPrimary: boolean;
+  factory: {
+    id: string;
+    name: string;
+    timezone: string;
+    theme: unknown;
+    active: boolean;
+  };
 };
 
 @Injectable()
@@ -47,9 +56,13 @@ export class AuthService {
       where: { login: dto.login },
       include: {
         profile: true,
-        userFactoryRoles: {
+        usersFactories: {
           include: {
-            factory: true,
+            factory: true
+          }
+        },
+        usersRoles: {
+          include: {
             role: true
           }
         }
@@ -80,38 +93,38 @@ export class AuthService {
       }
     });
 
-    const factoryId = this.resolveFactoryId(
-      dto.factoryId,
-      user.userFactoryRoles
-        .filter((item) => item.factory.active && item.role.active)
-        .map((item) => item.factoryId)
-    );
-    const roles = this.rolesForFactory(user.userFactoryRoles, factoryId);
-    if (!roles.length) {
+    const memberships = sortFactoryMemberships(user.usersFactories.filter((item) => item.active && item.factory.active));
+    const primaryMembership = memberships.find((item) => item.isPrimary) ?? memberships[0];
+    if (!primaryMembership) {
       throw new ForbiddenException({
-        code: "NO_FACTORY_ROLE",
-        message: "Нет роли на выбранной фабрике"
+        code: "NO_FACTORY_ACCESS",
+        message: "Нет доступа к фабрике"
       });
     }
 
-    const selectedRole = this.resolveActiveRole(dto.role, roles);
-    const factory = user.userFactoryRoles.find((item) => item.factoryId === factoryId && item.factory.active)?.factory;
-    if (!factory) {
+    const roles = this.rolesForUser(user.usersRoles);
+    if (!roles.length) {
       throw new ForbiddenException({
         code: "NO_FACTORY_ROLE",
-        message: "Нет доступа к выбранной фабрике"
+        message: "Нет назначенных ролей"
       });
     }
+    const apiFactory = this.mapFactory(primaryMembership.factory);
+    const factories = memberships.map((item) => this.mapFactory(item.factory));
+    const fullName = user.profile?.fullName ?? user.login;
+    const primaryRole = this.resolvePrimaryRole(roles);
 
     const context: SessionContext = {
       payload: {
         sub: user.id,
-        factoryId,
-        role: selectedRole,
+        factoryId: primaryMembership.factoryId,
+        role: primaryRole,
+        roles,
         login: user.login,
-        fullName: user.profile?.fullName ?? user.login
+        fullName
       },
-      factory: this.mapFactory(factory),
+      factory: apiFactory,
+      factories,
       roles,
       mustChangePassword: user.mustChangePassword
     };
@@ -121,7 +134,7 @@ export class AuthService {
       data: {
         action: "login",
         userId: user.id,
-        factoryId,
+        factoryId: primaryMembership.factoryId,
         ip: meta.ip,
         userAgent: meta.userAgent
       }
@@ -310,7 +323,7 @@ export class AuthService {
       await createRefreshToken;
     }
 
-    const permissions = accessForRole(context.payload.role);
+    const permissions = accessForRoles(context.roles);
     const response: ApiLoginResponse = {
       ok: true,
       role: context.payload.role,
@@ -322,11 +335,14 @@ export class AuthService {
         factoryId: context.payload.factoryId,
         login: context.payload.login,
         role: context.payload.role,
+        roles: context.roles,
         fullName: context.payload.fullName,
         factory: context.factory,
+        factories: context.factories,
         access: permissions
       },
       factory: context.factory,
+      factories: context.factories,
       permissions
     };
 
@@ -377,11 +393,13 @@ export class AuthService {
         !payload.sub ||
         !payload.factoryId ||
         !payload.role ||
+        !Array.isArray(payload.roles) ||
         !payload.login ||
         !payload.fullName ||
         !payload.jti ||
         !payload.familyId ||
-        !isUserRole(payload.role)
+        !isUserRole(payload.role) ||
+        !payload.roles.every(isUserRole)
       ) {
         throw this.invalidRefreshToken();
       }
@@ -396,10 +414,13 @@ export class AuthService {
       where: { id: userId },
       include: {
         profile: true,
-        userFactoryRoles: {
-          where: { factoryId },
+        usersFactories: {
           include: {
-            factory: true,
+            factory: true
+          }
+        },
+        usersRoles: {
+          include: {
             role: true
           }
         }
@@ -409,7 +430,8 @@ export class AuthService {
       throw this.invalidRefreshToken();
     }
 
-    const roles = this.rolesForFactory(user.userFactoryRoles, factoryId);
+    const memberships = sortFactoryMemberships(user.usersFactories.filter((item) => item.active && item.factory.active));
+    const roles = this.rolesForUser(user.usersRoles);
     if (!roles.includes(role)) {
       throw new ForbiddenException({
         code: "ROLE_NOT_AVAILABLE",
@@ -417,8 +439,9 @@ export class AuthService {
       });
     }
 
-    const factory = user.userFactoryRoles.find((item) => item.factoryId === factoryId && item.factory.active)?.factory;
-    if (!factory) {
+    const primaryMembership =
+      memberships.find((item) => item.factoryId === factoryId) ?? memberships.find((item) => item.isPrimary) ?? memberships[0];
+    if (!primaryMembership) {
       throw new ForbiddenException({
         code: "FACTORY_NOT_AVAILABLE",
         message: "Фабрика больше недоступна"
@@ -428,12 +451,14 @@ export class AuthService {
     return {
       payload: {
         sub: user.id,
-        factoryId,
+        factoryId: primaryMembership.factoryId,
         role,
+        roles,
         login: user.login,
         fullName: user.profile?.fullName ?? user.login
       },
-      factory: this.mapFactory(factory),
+      factory: this.mapFactory(primaryMembership.factory),
+      factories: memberships.map((item) => this.mapFactory(item.factory)),
       roles,
       mustChangePassword: user.mustChangePassword
     };
@@ -450,49 +475,16 @@ export class AuthService {
     });
   }
 
-  private resolveFactoryId(factoryId: string | undefined, rawFactoryIds: string[]): string {
-    const factoryIds = Array.from(new Set(rawFactoryIds));
-    if (factoryId) {
-      if (!factoryIds.includes(factoryId)) {
-        throw new ForbiddenException({
-          code: "FACTORY_FORBIDDEN",
-          message: "Нет доступа к выбранной фабрике"
-        });
-      }
-      return factoryId;
-    }
-    if (factoryIds.length === 1) {
-      return factoryIds[0];
-    }
-    throw new BadRequestException({
-      code: "FACTORY_REQUIRED",
-      message: "Нужно выбрать фабрику"
-    });
-  }
-
-  private rolesForFactory<T extends { factoryId: string; role: { code: string; active: boolean }; factory: { active: boolean } }>(
-    memberships: T[],
-    factoryId: string
-  ): UserRole[] {
-    const roleCodes = memberships
-      .filter((item) => item.factoryId === factoryId && item.factory.active && item.role.active && isUserRole(item.role.code))
+  private rolesForUser(userRoles: Array<{ role: { code: string; active: boolean } }>): UserRole[] {
+    const roleCodes = userRoles
+      .filter((item) => item.role.active && isUserRole(item.role.code))
       .map((item) => item.role.code)
       .filter(isUserRole);
     const available = new Set(roleCodes);
     return USER_ROLES.filter((role) => available.has(role));
   }
 
-  private resolveActiveRole(role: string | undefined, roles: UserRole[]): UserRole {
-    if (role) {
-      if (isUserRole(role) && roles.includes(role)) {
-        return role;
-      }
-      throw new ForbiddenException({
-        code: "ROLE_FORBIDDEN",
-        message: "Роль недоступна на выбранной фабрике"
-      });
-    }
-
+  private resolvePrimaryRole(roles: UserRole[]): UserRole {
     const selectedRole = USER_ROLES.find((candidate) => roles.includes(candidate));
     if (!selectedRole) {
       throw new ForbiddenException({
@@ -549,6 +541,34 @@ export class AuthService {
 
 function isUserRole(role: string): role is UserRole {
   return userRoleSet.has(role);
+}
+
+function accessForRoles(roles: UserRole[]): RoleAccess {
+  const modules = new Set<RoleAccess["modules"][number]>();
+  const actions = new Set<RoleAccess["actions"][number]>();
+  for (const role of roles) {
+    const access = accessForRole(role);
+    access.modules.forEach((module) => modules.add(module));
+    access.actions.forEach((action) => actions.add(action));
+  }
+  return {
+    modules: [...modules],
+    actions: [...actions]
+  };
+}
+
+function sortFactoryMemberships<T extends FactoryMembership>(memberships: T[]): T[] {
+  return [...memberships].sort((left, right) => {
+    const primaryCompare = Number(right.isPrimary) - Number(left.isPrimary);
+    if (primaryCompare) {
+      return primaryCompare;
+    }
+    const nameCompare = left.factory.name.localeCompare(right.factory.name, "ru");
+    if (nameCompare) {
+      return nameCompare;
+    }
+    return left.factoryId.localeCompare(right.factoryId);
+  });
 }
 
 function parseDurationMs(value: string): number {

@@ -25,7 +25,8 @@ const ACCESS_POLICY = Object.freeze({
       "deviationReasons.edit",
       "sections.manage",
       "plans.view",
-      "plans.edit"
+      "plans.edit",
+      "plans.factory.edit"
     ])
   }),
   hr: Object.freeze({
@@ -38,6 +39,7 @@ const ACCESS_POLICY = Object.freeze({
       "deviationReasons.edit",
       "plans.view",
       "plans.edit",
+      "plans.hr.edit",
       "personnel.view"
     ])
   }),
@@ -47,11 +49,11 @@ const ACCESS_POLICY = Object.freeze({
   }),
   outsourcer: Object.freeze({
     modules: Object.freeze(["plans", "personnel", "housing", ...BASE_MODULES]),
-    actions: Object.freeze(["notifications.view", "profile.view", "plans.view", "plans.edit", "personnel.view", "personnel.edit", "housing.view", "housing.edit"])
+    actions: Object.freeze(["notifications.view", "profile.view", "plans.view", "plans.edit", "plans.out.edit", "personnel.view", "personnel.edit", "housing.view", "housing.edit"])
   }),
   outsourcerBrigadier: Object.freeze({
     modules: Object.freeze(["facts", ...BASE_MODULES]),
-    actions: Object.freeze(["notifications.view", "profile.view", "facts.view", "facts.edit"])
+    actions: Object.freeze(["notifications.view", "profile.view", "facts.view", "facts.edit", "facts.out.edit"])
   }),
   hrOutsourcer: Object.freeze({
     modules: Object.freeze(["personnel", ...BASE_MODULES]),
@@ -63,11 +65,11 @@ const ACCESS_POLICY = Object.freeze({
   }),
   factoryMaster: Object.freeze({
     modules: Object.freeze(["dashboard", "facts", ...BASE_MODULES]),
-    actions: Object.freeze(["dashboard.requestFactAnalytics.view", "notifications.view", "profile.view", "facts.view", "facts.edit"])
+    actions: Object.freeze(["dashboard.requestFactAnalytics.view", "notifications.view", "profile.view", "facts.view", "facts.edit", "facts.factory.edit"])
   }),
   outMaster: Object.freeze({
     modules: Object.freeze(["facts", ...BASE_MODULES]),
-    actions: Object.freeze(["notifications.view", "profile.view", "facts.view", "facts.edit"])
+    actions: Object.freeze(["notifications.view", "profile.view", "facts.view", "facts.edit", "facts.out.edit"])
   }),
   tempEmployee: Object.freeze({
     modules: Object.freeze([...BASE_MODULES]),
@@ -85,12 +87,17 @@ const ACCESS_POLICY = Object.freeze({
       "sections.manage",
       "plans.view",
       "plans.edit",
+      "plans.factory.edit",
+      "plans.hr.edit",
+      "plans.out.edit",
       "personnel.view",
       "personnel.edit",
       "housing.view",
       "housing.edit",
       "facts.view",
-      "facts.edit"
+      "facts.edit",
+      "facts.factory.edit",
+      "facts.out.edit"
     ])
   })
 });

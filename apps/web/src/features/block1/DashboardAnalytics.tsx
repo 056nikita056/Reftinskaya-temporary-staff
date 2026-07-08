@@ -130,8 +130,7 @@ export function DashboardAnalytics({ profile, factoryId }: DashboardAnalyticsPro
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-500">
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-refGreen">Фабрика: {profile?.factory?.name || profile?.factoryName || factoryId || "выбрана"}</span>
-          <span className="rounded-full bg-slate-100 px-3 py-1">factoryId: {profile?.factoryId || factoryId || "—"}</span>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-refGreen">Фабрика: {profile?.factory?.name || profile?.factoryName || "выбрана"}</span>
         </div>
       </section>
 

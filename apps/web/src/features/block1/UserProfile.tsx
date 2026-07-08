@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { KeyRound, LogOut, ShieldCheck, UserCircle } from "lucide-react";
 import type { CurrentUserProfile, RoleKey } from "../../api/client";
 import { Empty } from "../../components/common";
-import { moduleLabelForRole, roleOptions } from "../../domain/roles";
+import { moduleLabel, roleOptions } from "../../domain/roles";
 import { useUiFeedback } from "../../ui/feedback";
 
 function initials(name?: string) {
@@ -26,6 +26,7 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
   if (!profile) {
     return <Empty title="Профиль загружается" text="Получаем данные текущего пользователя." />;
   }
+  const roleLabels = (profile.roles?.length ? profile.roles : [profile.role]).map((role) => roleLabel(role)).join(", ");
 
   return (
     <div className="space-y-4">
@@ -41,17 +42,16 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
           </div>
           <div className="min-w-0">
             <p className="text-xl font-black text-refDark">{profile.fullName}</p>
-            <p className="text-sm font-bold text-slate-500">{roleLabel(profile.role)} · {profile.factoryName}</p>
+            <p className="text-sm font-bold text-slate-500">{roleLabels} · {profile.factoryName}</p>
           </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           <ProfileRow label="ФИО" value={profile.fullName} />
-          <ProfileRow label="Роль" value={profile.role} />
+          <ProfileRow label="Роли" value={roleLabels} />
           <ProfileRow label="Логин / email" value={profile.email || profile.login} />
           <ProfileRow label="Выбранная фабрика" value={profile.factoryName} />
-          <ProfileRow label="factoryId" value={profile.factoryId} />
-          <ProfileRow label="Активный модуль" value={profile.modules[0] || "profile"} />
+          <ProfileRow label="Первый доступный модуль" value={moduleLabel(profile.modules[0] || "profile")} />
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -71,7 +71,7 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
         <AccessPanel
           icon={<UserCircle size={18} />}
           title="Доступные модули"
-          items={profile.modules.map((module) => moduleLabelForRole(module, profile.role))}
+          items={profile.modules.map((module) => moduleLabel(module))}
         />
         <AccessPanel
           icon={<ShieldCheck size={18} />}

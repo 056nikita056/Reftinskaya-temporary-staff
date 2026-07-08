@@ -1,8 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { USER_ROLES } from "@reftinskaya/contracts";
-import { IsIn, IsOptional, IsString, IsUUID, MinLength } from "class-validator";
-
-const userRoles = [...USER_ROLES];
+import { ApiProperty } from "@nestjs/swagger";
+import { IsString, MinLength } from "class-validator";
 
 export class LoginDto {
   @ApiProperty({ example: "admin" })
@@ -12,16 +9,6 @@ export class LoginDto {
   @ApiProperty({ example: "admin12345" })
   @IsString()
   password!: string;
-
-  @ApiPropertyOptional({ format: "uuid" })
-  @IsOptional()
-  @IsUUID()
-  factoryId?: string;
-
-  @ApiPropertyOptional({ enum: userRoles })
-  @IsOptional()
-  @IsIn(userRoles)
-  role?: string;
 }
 
 export class RefreshDto {

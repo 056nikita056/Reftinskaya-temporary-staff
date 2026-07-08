@@ -1,6 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   BarChart3,
   BedDouble,
   Bell,
@@ -12,7 +11,7 @@ import {
   UserCircle,
   Users
 } from "lucide-react";
-import { api, BootstrapData, clearAuthTokens, CurrentUserProfile, Factory, hasAuthTokens, RoleKey } from "./api/client";
+import { accessForRole, api, BootstrapData, clearAuthTokens, CurrentUserProfile, Factory, hasAuthTokens, RoleAccess, type AccessAction, type AccessModule, RoleKey } from "./api/client";
 import { useBootstrap } from "./api/useBootstrap";
 import { Empty } from "./components/common";
 import { AdminUsers } from "./features/block1/AdminUsers";
@@ -24,7 +23,6 @@ import { FactsV2 } from "./features/facts/Facts";
 import { Housing } from "./features/housing/Housing";
 import { PersonnelV2 } from "./features/personnel/Personnel";
 import { Plans } from "./features/plans/Plans";
-import { moduleLabelForRole, roleOptions } from "./domain/roles";
 import type { ActionDialogState, BootstrapLoadMore, BootstrapMutate, ConfirmOptions, ModuleKey, ToastTone, ViewState } from "./domain/types";
 import { UiFeedbackContext } from "./ui/feedback";
 
@@ -32,14 +30,20 @@ const authKey = "reft-web-auth-v1";
 const savedLoginKey = "reft-web-login-v1";
 const selectedFactoryKey = "reft-web-selected-factory-v1";
 
-const block1LoginRoles: RoleKey[] = ["factoryPlanner", "hr", "directorOutsourcing", "factoryMaster", "admin"];
 const legacyModules = new Set<ModuleKey>(["plans", "dictionaries", "personnel", "housing", "facts"]);
 const moduleOrder: ModuleKey[] = ["dashboard", "plans", "dictionaries", "personnel", "housing", "facts", "notifications", "profile", "adminUsers"];
 
 type AuthState = {
   loggedIn: boolean;
   role: RoleKey;
+  roles: RoleKey[];
   factoryId?: string;
+  access: RoleAccess;
+};
+
+const emptyAccess: RoleAccess = {
+  modules: ["profile"],
+  actions: ["profile.view"]
 };
 
 function readJson<T>(key: string, fallback: T): T {
@@ -51,39 +55,74 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
-function modulesForRole(role: RoleKey) {
-  const roleConfig = roleOptions.find((item) => item.key === role) || roleOptions[0];
-  const allowed = new Set<ModuleKey>(roleConfig.modules);
-  if (block1LoginRoles.includes(role)) allowed.add("dashboard");
-  if (role !== "admin") allowed.delete("adminUsers");
+function accessForRoles(roles: RoleKey[]): RoleAccess {
+  const modules = new Set<AccessModule>();
+  const actions = new Set<AccessAction>();
+  const effectiveRoles = roles.length ? roles : ["factoryPlanner"];
+  for (const currentRole of effectiveRoles) {
+    const access = accessForRole(currentRole);
+    access.modules.forEach((module) => modules.add(module));
+    access.actions.forEach((action) => actions.add(action));
+  }
+  return {
+    modules: [...modules],
+    actions: [...actions]
+  };
+}
+
+function modulesForAccess(access: RoleAccess) {
+  const allowed = new Set(access.modules);
   return moduleOrder.filter((module) => allowed.has(module));
 }
 
-function labelForModule(module: ModuleKey, role: RoleKey) {
-  if (module === "dashboard") return "Дашборд";
-  if (module === "adminUsers") return "Администрирование";
-  return moduleLabelForRole(module, role);
+function labelForModule(module: ModuleKey) {
+  const labels: Record<ModuleKey, string> = {
+    dashboard: "Дашборд",
+    plans: "Планы",
+    dictionaries: "Справочники",
+    personnel: "База персонала",
+    housing: "Проживание",
+    facts: "Факты",
+    notifications: "Уведомления",
+    profile: "Профиль",
+    adminUsers: "Администрирование"
+  };
+  return labels[module];
 }
 
-function factoryMeta(factory: Factory) {
-  const timezone = factory.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5";
-  if (factory.id === "reftinskaya-main") return "factory_ref · " + timezone;
-  if (factory.id === "factory-svd") return "factory_svd · " + timezone;
-  return `${factory.id} · ${timezone}`;
+function sameRoles(left: RoleKey[], right: RoleKey[]) {
+  if (left.length !== right.length) return false;
+  return left.every((role, index) => role === right[index]);
 }
 
-function roleLabel(role: RoleKey) {
-  return roleOptions.find((item) => item.key === role)?.label || role;
+function sameAccess(left: RoleAccess, right: RoleAccess) {
+  return sameSet(left.modules, right.modules) && sameSet(left.actions, right.actions);
+}
+
+function sameSet<T extends string>(left: readonly T[], right: readonly T[]) {
+  if (left.length !== right.length) return false;
+  const available = new Set(left);
+  return right.every((item) => available.has(item));
+}
+
+function hasModule(access: RoleAccess, module: ModuleKey) {
+  return access.modules.includes(module);
+}
+
+function hasAction(access: RoleAccess, action: AccessAction) {
+  return access.actions.includes(action);
 }
 
 export function App() {
-  const [{ loggedIn, role, factoryId }, setAuth] = useState<AuthState>(() => {
+  const [{ loggedIn, role, roles, factoryId, access }, setAuth] = useState<AuthState>(() => {
     const stored = readJson<AuthState | null>(authKey, null);
-    if (!stored || !stored.loggedIn || !hasAuthTokens()) return { loggedIn: false, role: "factoryPlanner" };
-    return stored;
+    if (!stored || !stored.loggedIn || !hasAuthTokens()) {
+      return { loggedIn: false, role: "factoryPlanner", roles: ["factoryPlanner"], access: emptyAccess };
+    }
+    const storedRoles = stored.roles?.length ? stored.roles : [stored.role];
+    return { ...stored, roles: storedRoles, access: stored.access || accessForRoles(storedRoles) };
   });
   const [selectedFactory, setSelectedFactory] = useState<Factory | null>(() => readJson<Factory | null>(selectedFactoryKey, null));
-  const [authStep, setAuthStep] = useState<"factory" | "login">(() => selectedFactory ? "login" : "factory");
   const [active, setActive] = useState<ModuleKey>("dashboard");
   const [view, setView] = useState<ViewState>({ type: "list" });
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
@@ -93,7 +132,7 @@ export function App() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
 
-  const navModules = useMemo(() => modulesForRole(role), [role]);
+  const navModules = useMemo(() => modulesForAccess(access), [access]);
   const legacyEnabled = loggedIn && legacyModules.has(active);
   const { data, error: legacyError, notice: apiNotice, mutate, loadMore } = useBootstrap(legacyEnabled);
 
@@ -118,9 +157,9 @@ export function App() {
   const noticeTone = apiNotice ? "success" : toast?.tone || "success";
 
   useEffect(() => {
-    if (loggedIn) localStorage.setItem(authKey, JSON.stringify({ loggedIn, role, factoryId: factoryId || selectedFactory?.id }));
+    if (loggedIn) localStorage.setItem(authKey, JSON.stringify({ loggedIn, role, roles, factoryId: factoryId || selectedFactory?.id, access }));
     else localStorage.removeItem(authKey);
-  }, [loggedIn, role, factoryId, selectedFactory?.id]);
+  }, [loggedIn, role, roles, factoryId, selectedFactory?.id, access]);
 
   useEffect(() => {
     if (selectedFactory) localStorage.setItem(selectedFactoryKey, JSON.stringify(selectedFactory));
@@ -128,9 +167,9 @@ export function App() {
   }, [selectedFactory]);
 
   useEffect(() => {
-    if (!navModules.includes(active)) setActive("dashboard");
+    if (!navModules.includes(active)) setActive(navModules[0] || "profile");
     setView({ type: "list" });
-  }, [role, navModules]);
+  }, [navModules]);
 
   useEffect(() => {
     const updateOnline = () => setOnline(navigator.onLine);
@@ -156,7 +195,13 @@ export function App() {
         if (!alive) return;
         setProfile(current);
         if (current.factory) setSelectedFactory(current.factory);
-        setAuth((prev) => prev.role === current.role && prev.factoryId === current.factoryId ? prev : { ...prev, role: current.role, factoryId: current.factoryId });
+        const nextRoles = current.roles?.length ? [...current.roles] : [current.role];
+        const nextAccess = current.access || { modules: [...current.modules], actions: [...current.actions] };
+        setAuth((prev) =>
+          prev.role === current.role && prev.factoryId === current.factoryId && sameRoles(prev.roles, nextRoles) && sameAccess(prev.access, nextAccess)
+            ? prev
+            : { ...prev, role: current.role, roles: nextRoles, factoryId: current.factoryId, access: nextAccess }
+        );
       })
       .catch((err) => {
         if (!alive) return;
@@ -178,8 +223,7 @@ export function App() {
   const logout = () => {
     api.logout().catch(() => clearAuthTokens()).finally(() => {
       setProfile(null);
-      setAuth({ loggedIn: false, role, factoryId: selectedFactory?.id });
-      setAuthStep(selectedFactory ? "login" : "factory");
+      setAuth({ loggedIn: false, role: "factoryPlanner", roles: ["factoryPlanner"], access: emptyAccess });
     });
   };
 
@@ -189,22 +233,12 @@ export function App() {
   };
 
   if (!loggedIn) {
-    if (authStep === "factory") {
-      return (
-        <FactorySelection
-          selectedFactory={selectedFactory}
-          setSelectedFactory={setSelectedFactory}
-          continueToLogin={() => setAuthStep("login")}
-        />
-      );
-    }
     return (
       <Login
-        selectedFactory={selectedFactory}
-        backToFactories={() => setAuthStep("factory")}
-        onLogin={(nextRole, nextFactoryId) => {
-          setAuth({ loggedIn: true, role: nextRole, factoryId: nextFactoryId });
-          setActive("dashboard");
+        onLogin={(nextRole, nextRoles, nextAccess, nextFactoryId, nextFactory) => {
+          setSelectedFactory(nextFactory || null);
+          setAuth({ loggedIn: true, role: nextRole, roles: nextRoles.length ? nextRoles : [nextRole], factoryId: nextFactoryId, access: nextAccess });
+          setActive(modulesForAccess(nextAccess)[0] || "profile");
         }}
       />
     );
@@ -214,7 +248,6 @@ export function App() {
     <UiFeedbackContext.Provider value={feedback}>
       <main className="min-h-[100dvh] bg-[#eef2f1] text-refDark">
         <MobileHeader
-          role={role}
           active={active}
           selectedFactory={selectedFactory}
           openModule={openModule}
@@ -237,6 +270,8 @@ export function App() {
           <section className="min-w-0 px-3 pb-24 pt-4 md:px-6 lg:px-10 lg:py-8">
             <Workspace
               role={role}
+              roles={roles}
+              access={access}
               active={active}
               view={view}
               setView={setView}
@@ -254,76 +289,14 @@ export function App() {
           </section>
         </div>
 
-        <MobileNav role={role} modules={navModules} active={active} setActive={openModule} />
+        <MobileNav modules={navModules} active={active} setActive={openModule} />
         {dialog && <ActionDialog dialog={dialog} close={closeDialog} />}
       </main>
     </UiFeedbackContext.Provider>
   );
 }
 
-function FactorySelection({ selectedFactory, setSelectedFactory, continueToLogin }: { selectedFactory: Factory | null; setSelectedFactory: (factory: Factory) => void; continueToLogin: () => void }) {
-  const [factories, setFactories] = useState<Factory[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let alive = true;
-    api.factories()
-      .then((items) => {
-        if (!alive) return;
-        setFactories(items);
-        if (!selectedFactory && items[0]) setSelectedFactory(items[0]);
-      })
-      .catch(() => {
-        if (alive) setFactories([]);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
-      <section className="w-full max-w-[390px] rounded-2xl bg-white p-6 shadow-panel">
-        <div className="mb-8 text-center">
-          <img src="/ref-logo.png" alt="REF" className="mx-auto h-24 w-36 object-contain" />
-          <h1 className="mt-4 text-2xl font-black leading-tight text-refDark">Выберите фабрику</h1>
-        </div>
-        <div className="space-y-3">
-          {loading ? (
-            Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-[86px] animate-pulse rounded-lg bg-slate-100" />)
-          ) : factories.map((factory) => {
-            const selected = selectedFactory?.id === factory.id;
-            return (
-              <button
-                key={factory.id}
-                className={`w-full rounded-lg border p-3 text-left transition ${selected ? "border-refGreen bg-emerald-50" : "border-slate-200 bg-slate-50 hover:border-slate-300"} ${factory.active ? "" : "opacity-70"}`}
-                onClick={() => factory.active && setSelectedFactory(factory)}
-                disabled={!factory.active}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black text-refDark">{factory.name}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">{factoryMeta(factory)}</p>
-                  </div>
-                  <span className={`mt-8 rounded-full border px-3 py-1 text-[11px] font-black ${factory.active ? "border-refGreen bg-white text-refGreen" : "border-red-200 bg-red-50 text-red-600"}`}>
-                    {factory.active ? "доступна" : "недоступна"}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <button className="btn-primary mt-6 w-full" disabled={!selectedFactory?.active} onClick={continueToLogin}>Продолжить</button>
-        <p className="mt-4 text-xs font-semibold leading-5 text-slate-500">После выбора фабрики контекст сохраняется до выхода или смены фабрики.</p>
-      </section>
-    </main>
-  );
-}
-
-function Login({ selectedFactory, backToFactories, onLogin }: { selectedFactory: Factory | null; backToFactories: () => void; onLogin: (role: RoleKey, factoryId?: string) => void }) {
+function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access: RoleAccess, factoryId?: string, factory?: Factory) => void }) {
   const saved = useMemo(() => readJson<{ login?: string }>(savedLoginKey, {}), []);
   const [login, setLogin] = useState(saved.login || "admin");
   const [password, setPassword] = useState("");
@@ -335,10 +308,12 @@ function Login({ selectedFactory, backToFactories, onLogin }: { selectedFactory:
     setError("");
     setSubmitting(true);
     try {
-      const result = await api.login(login, password, selectedFactory?.id);
+      const result = await api.login(login, password);
       const nextRole = result.user?.role || result.role;
+      const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : [nextRole];
+      const nextAccess = result.user?.access || result.permissions || accessForRoles(nextRoles);
       localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
-      onLogin(nextRole, result.user?.factoryId || selectedFactory?.id);
+      onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id, result.user?.factory || result.factory);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось войти");
     } finally {
@@ -349,26 +324,9 @@ function Login({ selectedFactory, backToFactories, onLogin }: { selectedFactory:
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
       <section className="w-full max-w-[390px] rounded-2xl bg-white p-6 shadow-panel">
-        <button className="mb-3 inline-flex items-center gap-2 text-xs font-black text-slate-500 hover:text-refGreen" onClick={backToFactories} type="button">
-          <ArrowLeft size={15} />
-          Сменить фабрику
-        </button>
         <div className="mb-4 text-center">
-          <img src="/ref-logo.png" alt="REF" className="mx-auto h-24 w-36 object-contain" />
-          <h1 className="mt-3 text-2xl font-black leading-tight text-refDark">Вход в систему</h1>
+          <h1 className="text-2xl font-black leading-tight text-refDark">Вход в систему</h1>
         </div>
-
-        {selectedFactory && (
-          <div className="mb-4 rounded-lg border border-refGreen bg-emerald-50 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-refDark">{selectedFactory.name}</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{factoryMeta(selectedFactory)}</p>
-              </div>
-              <span className="rounded-full border border-refGreen bg-white px-3 py-1 text-[11px] font-black text-refGreen">выбрана</span>
-            </div>
-          </div>
-        )}
 
         <form className="space-y-3" onSubmit={submit}>
           <label className="block">
@@ -393,7 +351,7 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
       <img src="/ref-logo.png" alt="REF" className="h-14 w-24 object-contain" />
       <div className="mt-5">
         <p className="text-sm font-black text-refDark">{profile?.factoryName || selectedFactory?.name || "Рефтинская птицефабрика"}</p>
-        <p className="mt-1 text-xs font-bold text-slate-500">{profile?.factoryId || selectedFactory?.id || "factory_ref"} · UTC+5</p>
+        <p className="mt-1 text-xs font-bold text-slate-500">{selectedFactory?.timezone?.replace("Asia/", "UTC+5 · ") || profile?.factory?.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</p>
       </div>
       <nav className="mt-10 space-y-2">
         {modules.map((key) => {
@@ -401,7 +359,7 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
           return (
             <button key={key} className={`nav-item ${active === key ? "nav-item-active" : ""}`} onClick={() => setActive(key)}>
               <Icon size={18} />
-              {labelForModule(key, role)}
+              {labelForModule(key)}
             </button>
           );
         })}
@@ -414,15 +372,15 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
   );
 }
 
-function MobileHeader({ role, active, selectedFactory, openModule, logout }: { role: RoleKey; active: ModuleKey; selectedFactory: Factory | null; openModule: (key: ModuleKey) => void; logout: () => void }) {
+function MobileHeader({ active, selectedFactory, openModule, logout }: { active: ModuleKey; selectedFactory: Factory | null; openModule: (key: ModuleKey) => void; logout: () => void }) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-3 py-2 lg:hidden">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <img src="/ref-logo.png" alt="REF" className="h-10 w-14 object-contain" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-black">{labelForModule(active, role)}</p>
-            <p className="truncate text-xs font-bold text-slate-500">{selectedFactory?.name || roleLabel(role)}</p>
+            <p className="truncate text-sm font-black">{labelForModule(active)}</p>
+            <p className="truncate text-xs font-bold text-slate-500">{selectedFactory?.name || "Рабочая область"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -438,7 +396,7 @@ function MobileHeader({ role, active, selectedFactory, openModule, logout }: { r
   );
 }
 
-function MobileNav({ role, modules, active, setActive }: { role: RoleKey; modules: ModuleKey[]; active: ModuleKey; setActive: (key: ModuleKey) => void }) {
+function MobileNav({ modules, active, setActive }: { modules: ModuleKey[]; active: ModuleKey; setActive: (key: ModuleKey) => void }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t border-slate-200 bg-white lg:hidden">
       {modules.map((key) => {
@@ -446,7 +404,7 @@ function MobileNav({ role, modules, active, setActive }: { role: RoleKey; module
         return (
           <button key={key} className={`flex min-w-[96px] flex-1 flex-col items-center gap-1 px-2 py-2 text-[10px] font-black ${active === key ? "text-refGreen" : "text-slate-600"}`} onClick={() => setActive(key)}>
             <Icon size={18} />
-            {labelForModule(key, role)}
+            {labelForModule(key)}
           </button>
         );
       })}
@@ -456,6 +414,8 @@ function MobileNav({ role, modules, active, setActive }: { role: RoleKey; module
 
 function Workspace({
   role,
+  roles,
+  access,
   active,
   view,
   setView,
@@ -471,6 +431,8 @@ function Workspace({
   legacyEnabled
 }: {
   role: RoleKey;
+  roles: RoleKey[];
+  access: RoleAccess;
   active: ModuleKey;
   view: ViewState;
   setView: (view: ViewState) => void;
@@ -485,21 +447,56 @@ function Workspace({
   logout: () => void;
   legacyEnabled: boolean;
 }) {
-  if (active === "dashboard") return <DashboardAnalytics profile={profile} factoryId={profile?.factoryId || selectedFactory?.id} />;
-  if (active === "notifications") return <NotificationsCenter onNavigate={openModule} />;
-  if (active === "profile") return <UserProfile profile={profile} loading={profileLoading} error={profileError} onLogout={logout} />;
+  if (!hasModule(access, active)) {
+    return <Empty title="Нет доступа" text="Этот раздел не входит в права текущего пользователя." />;
+  }
+  if (active === "dashboard") {
+    return hasAction(access, "dashboard.requestFactAnalytics.view")
+      ? <DashboardAnalytics profile={profile} factoryId={profile?.factoryId || selectedFactory?.id} />
+      : <Empty title="Нет доступа" text="Просмотр дашборда недоступен для текущего набора прав." />;
+  }
+  if (active === "notifications") {
+    return hasAction(access, "notifications.view")
+      ? <NotificationsCenter onNavigate={openModule} />
+      : <Empty title="Нет доступа" text="Уведомления недоступны для текущего набора прав." />;
+  }
+  if (active === "profile") {
+    return hasAction(access, "profile.view")
+      ? <UserProfile profile={profile} loading={profileLoading} error={profileError} onLogout={logout} />
+      : <Empty title="Нет доступа" text="Профиль недоступен для текущего набора прав." />;
+  }
   if (active === "adminUsers") {
-    return role === "admin" ? <AdminUsers profile={profile} /> : <Empty title="Нет доступа" text="Администрирование доступно только роли admin." />;
+    return hasAction(access, "admin.users.manage") ? <AdminUsers profile={profile} /> : <Empty title="Нет доступа" text="Нет права на управление пользователями." />;
   }
 
   if (!legacyEnabled || !data) {
     return <Empty title="Загружаем раздел" text="Получаем данные выбранного рабочего раздела." />;
   }
-  if (active === "plans") return <Plans role={role} view={view} setView={setView} data={data} mutate={mutate} />;
-  if (active === "dictionaries") return <Dictionaries data={data} mutate={mutate} />;
-  if (active === "personnel") return <PersonnelV2 view={view} setView={setView} data={data} mutate={mutate} loadMore={loadMore} />;
-  if (active === "housing") return <Housing data={data} mutate={mutate} loadMore={loadMore} />;
-  if (active === "facts") return <FactsV2 role={role} view={view} setView={setView} data={data} mutate={mutate} loadMore={loadMore} />;
+  if (active === "plans") {
+    return hasAction(access, "plans.view")
+      ? <Plans role={role} access={access} view={view} setView={setView} data={data} mutate={mutate} />
+      : <Empty title="Нет доступа" text="Просмотр планов недоступен для текущего набора прав." />;
+  }
+  if (active === "dictionaries") {
+    return hasAction(access, "sections.manage")
+      ? <Dictionaries data={data} mutate={mutate} />
+      : <Empty title="Нет доступа" text="Справочники доступны только пользователям с правом управления участками." />;
+  }
+  if (active === "personnel") {
+    return hasAction(access, "personnel.view")
+      ? <PersonnelV2 view={view} setView={setView} data={data} mutate={mutate} loadMore={loadMore} />
+      : <Empty title="Нет доступа" text="Просмотр персонала недоступен для текущего набора прав." />;
+  }
+  if (active === "housing") {
+    return hasAction(access, "housing.view")
+      ? <Housing data={data} mutate={mutate} loadMore={loadMore} />
+      : <Empty title="Нет доступа" text="Просмотр проживания недоступен для текущего набора прав." />;
+  }
+  if (active === "facts") {
+    return hasAction(access, "facts.view")
+      ? <FactsV2 role={role} access={access} view={view} setView={setView} data={data} mutate={mutate} loadMore={loadMore} />
+      : <Empty title="Нет доступа" text="Фиксация работ недоступна для текущего набора прав." />;
+  }
   return <Empty title="Раздел готовится" text="Раздел подключен к ролевой карте и готов для следующего этапа UI." />;
 }
 

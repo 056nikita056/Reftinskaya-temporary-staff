@@ -4,12 +4,21 @@ import type { Operation, Section } from "../../api/client";
 import type { PlanKind } from "../../domain/types";
 import { calculateOutsource, displayOperationName, displaySectionName, numberValue } from "../../domain/display";
 
-export function PlanOperationCard({ kind, row, sections = [], assigned = [], edit, onChange, onCreateSection, onOpen }: { kind: PlanKind; row: Operation; sections?: Section[]; assigned?: string[]; edit?: boolean; onChange?: (patch: Partial<Operation>) => void; onCreateSection?: (name: string, rowId: string) => Promise<void>; onOpen?: () => void }) {
+export type PlanEditAccess = {
+  factory: boolean;
+  hr: boolean;
+  out: boolean;
+};
+
+export function PlanOperationCard({ kind, row, sections = [], assigned = [], edit, editAccess, onChange, onCreateSection, onOpen }: { kind: PlanKind; row: Operation; sections?: Section[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onCreateSection?: (name: string, rowId: string) => Promise<void>; onOpen?: () => void }) {
   const [sectionQuery, setSectionQuery] = useState("");
   const required = numberValue(row.required_staff);
   const staff = numberValue(row.staff_count);
   const outsource = calculateOutsource(required, staff);
-  const canOpen = kind === "out" && !edit && Boolean(onOpen);
+  const canEditFactory = Boolean(edit && (editAccess?.factory ?? kind === "factory"));
+  const canEditHr = Boolean(edit && (editAccess?.hr ?? kind === "hr"));
+  const canEditOut = Boolean(edit && (editAccess?.out ?? kind === "out"));
+  const canOpen = (kind === "out" || Boolean(editAccess?.out)) && !edit && Boolean(onOpen);
   const assignedText = assigned.length ? assigned.join(", ") : "";
   const update = (patch: Partial<Operation>) => onChange?.(patch);
   const normalizedSectionQuery = sectionQuery.trim();
@@ -47,7 +56,7 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
       }}
     >
       <div className="mb-2">
-        {edit && kind === "factory" ? (
+        {canEditFactory ? (
           <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
             <div className="grid min-w-0 gap-1">
               <div className="grid grid-cols-[1fr_2rem] gap-1">
@@ -95,23 +104,23 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
 
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-slate-300 bg-white text-center text-xs sm:text-sm">
         <PlanMetric label="Персонал" value={required}>
-          {edit && kind === "factory" ? (
+          {canEditFactory ? (
             <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Штат" value={staff}>
-          {edit && kind === "hr" ? (
+          {canEditHr ? (
             <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Аутсорсинг" value={outsource} accent />
       </div>
 
-      {(kind === "out" || assigned.length > 0) && (
+      {(kind === "out" || canEditOut || assigned.length > 0) && (
         <div className="mt-2 rounded-md bg-slate-50 p-2 text-xs font-bold text-slate-600">
-          {kind === "out" && (
+          {(kind === "out" || canEditOut) && (
             <div className="grid grid-cols-2 gap-2">
-              {edit ? (
+              {canEditOut ? (
                 <>
                   <label className="text-[11px] font-black text-slate-500">Часов в день<input className="field mt-1 h-8" value={row.hours_per_day} onChange={(event) => update({ hours_per_day: numberValue(event.target.value) })} /></label>
                   <label className="text-[11px] font-black text-slate-500">Ставка/час<input className="field mt-1 h-8" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} /></label>
@@ -124,7 +133,7 @@ export function PlanOperationCard({ kind, row, sections = [], assigned = [], edi
               )}
             </div>
           )}
-          {kind === "out" && !edit && <p className="mt-2 text-refGreen">Назначено: {assigned.length}/{Math.max(outsource, assigned.length, 1)}</p>}
+          {(kind === "out" || canEditOut) && !edit && <p className="mt-2 text-refGreen">Назначено: {assigned.length}/{Math.max(outsource, assigned.length, 1)}</p>}
           {assignedText && <p className="mt-2 text-refGreen">{assignedText}</p>}
           {canOpen && <p className="mt-2 text-right text-[11px] font-black text-refGreen">Открыть распределение</p>}
         </div>

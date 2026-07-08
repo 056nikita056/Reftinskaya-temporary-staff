@@ -26,12 +26,17 @@ export type AccessAction =
   | "sections.manage"
   | "plans.view"
   | "plans.edit"
+  | "plans.factory.edit"
+  | "plans.hr.edit"
+  | "plans.out.edit"
   | "personnel.view"
   | "personnel.edit"
   | "housing.view"
   | "housing.edit"
   | "facts.view"
-  | "facts.edit";
+  | "facts.edit"
+  | "facts.factory.edit"
+  | "facts.out.edit";
 
 export type RoleAccess = {
   modules: readonly AccessModule[];
@@ -61,8 +66,10 @@ export type CurrentUser = {
   factoryId: string;
   login: string;
   role: UserRole;
+  roles?: readonly UserRole[];
   fullName: string;
   factory?: Factory;
+  factories?: readonly Factory[];
   access?: RoleAccess;
 };
 
@@ -320,11 +327,14 @@ export type MutationDelta = {
 export type LoginResponse = {
   ok: boolean;
   role: UserRole;
+  roles?: readonly UserRole[];
   accessToken?: string;
   refreshToken?: string;
   user?: CurrentUser;
   factory?: Factory;
+  factories?: readonly Factory[];
   permissions?: RoleAccess;
+  mustChangePassword?: boolean;
 };
 
 export type RequestFactAnalyticsQuery = {

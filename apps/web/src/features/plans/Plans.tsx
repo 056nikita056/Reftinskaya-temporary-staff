@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
-import { PlanOperationCard } from "./PlanOperationCard";
+import { PlanOperationCard, type PlanEditAccess } from "./PlanOperationCard";
 import { Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
-import type { Assignment, BootstrapData, Employee, Operation, Plan, RoleKey, Section } from "../../api/client";
+import type { Assignment, BootstrapData, Employee, Operation, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displaySectionName, numberValue, operationGroups, planApprovalText, planPeriod, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal, Readonly, SectionTitle } from "../../components/common";
 import { useUiFeedback } from "../../ui/feedback";
 
 const NEW_PLAN_ID = "__new-plan__";
+
+type PlanAccess = {
+  factory: boolean;
+  hr: boolean;
+  out: boolean;
+};
 
 type NewPlanDraft = {
   dates: { start_date: string; end_date: string };
@@ -36,6 +42,42 @@ function createNewPlanDraft(): NewPlanDraft {
     dates: { start_date: todayRu(), end_date: defaultEndRu() },
     operations: []
   };
+}
+
+function planAccessForPermissions(access: RoleAccess): PlanAccess {
+  return {
+    factory: access.actions.includes("plans.factory.edit"),
+    hr: access.actions.includes("plans.hr.edit"),
+    out: access.actions.includes("plans.out.edit")
+  };
+}
+
+function primaryKind(access: PlanAccess, fallbackRole: RoleKey): PlanKind {
+  if (fallbackRole === "hr" && access.hr) return "hr";
+  if (fallbackRole === "outsourcer" && access.out) return "out";
+  if (access.factory) return "factory";
+  if (access.hr) return "hr";
+  if (access.out) return "out";
+  return "factory";
+}
+
+function editAccessForPlan(access: PlanAccess, plan: Plan): PlanEditAccess {
+  return {
+    factory: access.factory && plan.status === "В доработке",
+    hr: access.hr && canEditPlan("hr", plan),
+    out: access.out && canEditPlan("out", plan)
+  };
+}
+
+function hasEditAccess(access: PlanEditAccess) {
+  return access.factory || access.hr || access.out;
+}
+
+function sendKindForPlan(access: PlanEditAccess, plan: Plan): PlanKind | null {
+  if (plan.status === "В доработке" && access.factory) return "factory";
+  if (plan.status === "Отправлено" && access.hr) return "hr";
+  if (["Получено", "Не утверждено"].includes(plan.status) && access.out) return "out";
+  return null;
 }
 
 function operationCreatePayload(row: Operation) {
@@ -70,24 +112,26 @@ function busyOverlapsPeriod(busy: { start_at: string; end_at: string }, period: 
   return parseRuDate(busy.start_at) < parseRuDate(period.to) && parseRuDate(busy.end_at) > parseRuDate(period.from);
 }
 
-export function Plans({ role, view, setView, data, mutate }: { role: RoleKey; view: ViewState; setView: (view: ViewState) => void; data: BootstrapData; mutate: BootstrapMutate }) {
-  const kind: PlanKind = role === "hr" ? "hr" : role === "outsourcer" ? "out" : "factory";
+export function Plans({ role, access: permissions, view, setView, data, mutate }: { role: RoleKey; access: RoleAccess; view: ViewState; setView: (view: ViewState) => void; data: BootstrapData; mutate: BootstrapMutate }) {
+  const access = planAccessForPermissions(permissions);
+  const kind = primaryKind(access, role);
   const [creatingPlan, setCreatingPlan] = useState(false);
   const visiblePlans = data.plans.filter((plan) => {
-    if (kind === "factory") return plan.owner_role === "factory";
-    if (kind === "hr") return plan.owner_role === "factory" && plan.status !== "В доработке";
-    return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+    if (access.factory && plan.owner_role === "factory") return true;
+    if (access.hr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
+    if (access.out) return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+    return false;
   });
 
   if (view.type === "plan") {
-    return <PlanDetail kind={view.kind} edit={view.edit} planId={view.planId} data={data} mutate={mutate} back={() => setView({ type: "list" })} openEdit={() => setView({ type: "plan", kind: view.kind, planId: view.planId, edit: true })} openOperation={(operationId) => setView({ type: "assignment", planId: view.planId, operationId })} />;
+    return <PlanDetail kind={view.kind} access={access} edit={view.edit} planId={view.planId} data={data} mutate={mutate} back={() => setView({ type: "list" })} openEdit={() => setView({ type: "plan", kind: view.kind, planId: view.planId, edit: true })} openOperation={(operationId) => setView({ type: "assignment", planId: view.planId, operationId })} />;
   }
 
   if (view.type === "assignment") {
-    return <AssignmentScreen planId={view.planId} operationId={view.operationId} data={data} mutate={mutate} back={() => setView({ type: "plan", kind: "out", planId: view.planId })} />;
+    return <AssignmentScreen canEditOut={access.out} planId={view.planId} operationId={view.operationId} data={data} mutate={mutate} back={() => setView({ type: "plan", kind: "out", planId: view.planId })} />;
   }
 
-  if (creatingPlan && kind === "factory") {
+  if (creatingPlan && access.factory) {
     return <NewPlanDetail data={data} mutate={mutate} back={() => setCreatingPlan(false)} />;
   }
 
@@ -95,7 +139,7 @@ export function Plans({ role, view, setView, data, mutate }: { role: RoleKey; vi
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-black">Планы</h2>
-        {kind === "factory" && (
+        {access.factory && (
           <button className="btn-primary gap-2" onClick={() => setCreatingPlan(true)}>
             <Plus size={17} /> План
           </button>
@@ -244,7 +288,7 @@ function PlansEmpty({ kind, data }: { kind: PlanKind; data: BootstrapData }) {
   );
 }
 
-function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOperation }: { kind: PlanKind; planId: string; edit?: boolean; data: BootstrapData; mutate: BootstrapMutate; back: () => void; openEdit: () => void; openOperation: (operationId: string) => void }) {
+function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, openOperation }: { kind: PlanKind; access: PlanAccess; planId: string; edit?: boolean; data: BootstrapData; mutate: BootstrapMutate; back: () => void; openEdit: () => void; openOperation: (operationId: string) => void }) {
   const plan = data.plans.find((item) => item.id === planId);
   const operations = data.operations.filter((operation) => operation.plan_id === planId);
   const [drafts, setDrafts] = useState(() => operations.map((operation) => ({ ...operation })));
@@ -257,15 +301,17 @@ function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOper
   }, [planId, data.operations.length]);
 
   if (!plan) return <Empty text="План не найден" />;
-  const editable = canEditPlan(kind, plan);
+  const editAccess = editAccessForPlan(access, plan);
+  const editable = hasEditAccess(editAccess);
   const isEdit = Boolean(edit && editable);
+  const sendKind = sendKindForPlan(editAccess, plan);
 
   const save = async () => {
-    if (kind === "factory" && missingSectionRows(drafts).length) {
+    if (editAccess.factory && missingSectionRows(drafts).length) {
       notify("Выберите участок из справочника", "warning");
       return;
     }
-    if (kind === "factory") {
+    if (editAccess.factory) {
       await mutate(`/plans/${plan.id}`, "PUT", { ...dates, status: plan.status === "Отправлено" ? "В доработке" : plan.status }, "Период сохранен");
     }
     for (const row of drafts) {
@@ -275,26 +321,27 @@ function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOper
       const path = isDraftOperation(row) ? "/operations" : `/operations/${row.id}`;
       await mutate(path, method, {
         ...(isDraftOperation(row) ? { plan_id: plan.id } : {}),
-        ...(kind === "factory" ? { name: row.name, section_id: row.section_id, required_staff: required } : {}),
-        ...(kind === "hr" ? { staff_count: staff, outsource_count: calculateOutsource(required, staff) } : {}),
-        ...(kind === "out" ? { hours_per_day: numberValue(row.hours_per_day, 8), rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
+        ...(editAccess.factory ? { name: row.name, section_id: row.section_id, required_staff: required } : {}),
+        ...(editAccess.hr ? { staff_count: staff, outsource_count: calculateOutsource(required, staff) } : {}),
+        ...(editAccess.out ? { hours_per_day: numberValue(row.hours_per_day, 8), rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
       }, "Сохранено");
     }
   };
 
   const send = async () => {
-    if (kind === "factory" && missingSectionRows(drafts).length) {
+    if (!sendKind) return;
+    if (sendKind === "factory" && missingSectionRows(drafts).length) {
       notify("Выберите участок из справочника", "warning");
       return;
     }
     const invalidRows = drafts.flatMap((row) => {
       const missing: string[] = [];
-      if (kind === "factory") {
+      if (sendKind === "factory") {
         if (!row.section_id) missing.push("участок");
         if (!row.name) missing.push("операция");
         if (numberValue(row.required_staff) <= 0) missing.push("персонал");
       }
-      if (kind === "out") {
+      if (sendKind === "out") {
         if (numberValue(row.hours_per_day) <= 0) missing.push("часы в день");
         if (numberValue(row.rate_per_hour) <= 0) missing.push("ставка/час");
       }
@@ -304,7 +351,7 @@ function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOper
       notify(`Проверьте поля: ${invalidRows[0]}`, "warning");
       return;
     }
-    if (kind === "out") {
+    if (sendKind === "out") {
       const notReady = operations.some((operation) => {
         const need = calculateOutsource(operation.required_staff, operation.staff_count);
         const assigned = data.assignments.filter((assignment) => assignment.operation_id === operation.id).length;
@@ -315,11 +362,11 @@ function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOper
         return;
       }
     }
-    const question = kind === "factory" ? "Отправить план HR?" : kind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
+    const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     await save();
-    const status = kind === "factory" ? "Отправлено" : kind === "hr" ? "Получено" : "На согласовании";
-    await mutate(`/plans/${plan.id}`, "PUT", { status }, kind === "factory" ? "План отправлен в HR" : kind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    const status = sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
+    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
     back();
   };
 
@@ -352,17 +399,17 @@ function PlanDetail({ kind, planId, edit, data, mutate, back, openEdit, openOper
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
-      <PlanHeader plan={plan} dates={dates} setDates={setDates} edit={isEdit && kind === "factory"} />
+      <PlanHeader plan={plan} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
       <PlanFlowNotice kind={kind} plan={plan} />
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
-        <PlanEditor kind={kind} sections={data.sections || []} drafts={drafts} setDrafts={setDrafts} mutate={mutate} planId={plan.id} />
+        <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} drafts={drafts} setDrafts={setDrafts} mutate={mutate} planId={plan.id} />
       ) : (
-        <PlanTable kind={kind} operations={operations} openOperation={openOperation} assignments={data.assignments} employees={data.employees} />
+        <PlanTable kind={access.out ? "out" : kind} editAccess={{ factory: false, hr: false, out: access.out }} operations={operations} openOperation={openOperation} assignments={data.assignments} employees={data.employees} />
       )}
       {isEdit && (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
-          {kind === "factory" && <button className="rounded-md p-2 text-red-600" onClick={() => mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален").then(back)}><Trash2 /></button>}
+          {editAccess.factory && <button className="rounded-md p-2 text-red-600" onClick={() => mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален").then(back)}><Trash2 /></button>}
           <div className="ml-auto flex gap-2">
             <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-black" onClick={save}><Save size={16} className="inline" /> Сохранить</button>
             <button className="btn-primary gap-2" onClick={send}><Send size={16} /> Отправить</button>
@@ -409,7 +456,7 @@ function PlanHeader({ plan, dates, setDates, edit }: { plan: Plan; dates: { star
   );
 }
 
-function PlanTable({ kind, operations, openOperation, assignments, employees }: { kind: PlanKind; operations: Operation[]; openOperation: (operationId: string) => void; assignments: Assignment[]; employees: Employee[] }) {
+function PlanTable({ kind, editAccess, operations, openOperation, assignments, employees }: { kind: PlanKind; editAccess?: PlanEditAccess; operations: Operation[]; openOperation: (operationId: string) => void; assignments: Assignment[]; employees: Employee[] }) {
   return (
     <div className="space-y-3">
       {operationGroups(operations).map(({ section, rows }) => (
@@ -422,7 +469,7 @@ function PlanTable({ kind, operations, openOperation, assignments, employees }: 
                 return employee ? displayEmployeeName(employee) : "";
               }).filter(Boolean);
               return (
-                <PlanOperationCard key={row.id} kind={kind} row={row} assigned={assigned} onOpen={() => openOperation(row.id)} />
+                <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} assigned={assigned} onOpen={() => openOperation(row.id)} />
               );
             })}
           </div>
@@ -432,7 +479,7 @@ function PlanTable({ kind, operations, openOperation, assignments, employees }: 
   );
 }
 
-function AssignmentScreen({ planId, operationId, data, mutate, back }: { planId: string; operationId: string; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
+function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back }: { canEditOut: boolean; planId: string; operationId: string; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
   const operation = data.operations.find((item) => item.id === operationId);
   const plan = data.plans.find((item) => item.id === planId);
   const operationAssignments = data.assignments.filter((item) => item.operation_id === operationId);
@@ -445,7 +492,7 @@ function AssignmentScreen({ planId, operationId, data, mutate, back }: { planId:
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
 
   if (!operation || !plan) return <Empty text="Операция не найдена" />;
-  const editable = canEditPlan("out", plan);
+  const editable = canEditOut && canEditPlan("out", plan);
 
   return (
     <div className="space-y-3">
@@ -465,7 +512,7 @@ function AssignmentScreen({ planId, operationId, data, mutate, back }: { planId:
         {slots.map((slot, index) => (
           <div key={`${operationId}-${index}`} className="grid grid-cols-[36px_1fr_auto] items-center gap-2 rounded-md border border-slate-300 bg-white p-2">
             <div className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 text-sm font-black">{index + 1}</div>
-            <button className="min-h-9 rounded-md border border-slate-300 bg-slate-50 px-3 text-left text-sm font-bold hover:bg-emerald-50" onClick={() => editable && setPickerSlot(index)}>
+            <button className="min-h-9 rounded-md border border-slate-300 bg-slate-50 px-3 text-left text-sm font-bold hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70" disabled={!editable} onClick={() => setPickerSlot(index)}>
               {slot?.employee ? displayEmployeeName(slot.employee) : "Не выбрано"}
             </button>
             {slot?.assignment ? (
@@ -479,7 +526,11 @@ function AssignmentScreen({ planId, operationId, data, mutate, back }: { planId:
         ))}
       </div>
 
-      {!editable && <div className="rounded-md bg-slate-100 p-3 text-sm font-bold text-slate-600">План в статусе "{plan.status}". Распределение доступно только для статусов "Получено" и "Не утверждено".</div>}
+      {!editable && (
+        <div className="rounded-md bg-slate-100 p-3 text-sm font-bold text-slate-600">
+          {canEditOut ? `План в статусе "${plan.status}". Распределение доступно только для статусов "Получено" и "Не утверждено".` : "Нет права на распределение аутсорсинга."}
+        </div>
+      )}
       <button className="btn-primary ml-auto flex" onClick={back}>Сохранить</button>
       {pickerSlot !== null && (
         <PersonnelPicker
@@ -488,6 +539,7 @@ function AssignmentScreen({ planId, operationId, data, mutate, back }: { planId:
           period={{ from: plan.start_date, to: plan.end_date }}
           close={() => setPickerSlot(null)}
           select={async (employee) => {
+            if (!editable) return;
             await mutate("/assignments", "POST", { plan_id: planId, operation_id: operationId, employee_id: employee.id, status: "Назначен" }, "Сотрудник назначен");
             setPickerSlot(null);
           }}
@@ -531,7 +583,7 @@ function PersonnelPicker({ data, assignedIds, period, select, close }: { data: B
   );
 }
 
-function PlanEditor({ kind, sections = [], drafts, setDrafts, mutate, planId, onAddOperation }: { kind: PlanKind; sections?: Section[]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; mutate?: BootstrapMutate; planId?: string; onAddOperation?: () => void }) {
+function PlanEditor({ kind, editAccess, sections = [], drafts, setDrafts, mutate, planId, onAddOperation }: { kind: PlanKind; editAccess?: PlanEditAccess; sections?: Section[]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; mutate?: BootstrapMutate; planId?: string; onAddOperation?: () => void }) {
   const update = (id: string, patch: Partial<Operation>) => setDrafts(drafts.map((row) => row.id === id ? { ...row, ...patch } : row));
   const createSection = async (name: string, rowId: string) => {
     if (!mutate) return;
@@ -551,8 +603,8 @@ function PlanEditor({ kind, sections = [], drafts, setDrafts, mutate, planId, on
   };
   return (
     <div className="space-y-3">
-      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} row={row} sections={sections} edit onChange={(patch) => update(row.id, patch)} onCreateSection={createSection} />)}
-      {kind === "factory" && (
+      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} edit onChange={(patch) => update(row.id, patch)} onCreateSection={createSection} />)}
+      {(editAccess?.factory ?? kind === "factory") && (
         <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-white" onClick={addOperation}>
           <Plus size={16} className="inline" /> Операция
         </button>

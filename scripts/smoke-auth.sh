@@ -52,10 +52,10 @@ async function request(path, options = {}) {
   return { status: response.status, body };
 }
 
-async function loginAdmin(factoryId) {
+async function loginAdmin() {
   return request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ login, password, factoryId })
+    body: JSON.stringify({ login, password })
   });
 }
 
@@ -68,7 +68,7 @@ try {
   const factory = factories.body.find((item) => item.name === "Рефтинская");
   assert(factory?.id, "GET /factories did not include factory «Рефтинская»");
 
-  const firstLogin = await loginAdmin(factory.id);
+  const firstLogin = await loginAdmin();
   assert(firstLogin.status === 200, `login expected 200, got ${firstLogin.status}: ${JSON.stringify(firstLogin.body)}`);
   assert(firstLogin.body?.ok === true, "login response ok is not true");
   assert(firstLogin.body.role === "admin", `login response role expected admin, got ${firstLogin.body?.role}`);
@@ -109,7 +109,7 @@ try {
   });
   assert(refreshReuse.status === 401, `old refresh token reuse expected 401, got ${refreshReuse.status}: ${JSON.stringify(refreshReuse.body)}`);
 
-  const logoutLogin = await loginAdmin(factory.id);
+  const logoutLogin = await loginAdmin();
   assert(logoutLogin.status === 200, `login before logout expected 200, got ${logoutLogin.status}: ${JSON.stringify(logoutLogin.body)}`);
   const logout = await request("/auth/logout", {
     method: "POST",
@@ -127,12 +127,12 @@ try {
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     const badLogin = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ login, password: `wrong-${attempt}`, factoryId: factory.id })
+      body: JSON.stringify({ login, password: `wrong-${attempt}` })
     });
     assert(badLogin.status === 401, `bad login #${attempt} expected 401, got ${badLogin.status}: ${JSON.stringify(badLogin.body)}`);
   }
 
-  const lockedLogin = await loginAdmin(factory.id);
+  const lockedLogin = await loginAdmin();
   assert(
     lockedLogin.status === 401 && lockedLogin.body?.code === "ACCOUNT_LOCKED",
     `locked login expected 401 ACCOUNT_LOCKED, got ${lockedLogin.status}: ${JSON.stringify(lockedLogin.body)}`

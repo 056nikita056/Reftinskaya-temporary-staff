@@ -94,22 +94,38 @@ async function main(): Promise<void> {
     }
   });
 
-  await prisma.userFactoryRole.upsert({
+  await prisma.usersFactory.upsert({
     where: {
-      userId_factoryId_roleId: {
+      userId_factoryId: {
         userId: adminUser.id,
-        factoryId: factory.id,
-        roleId: adminRole.id
+        factoryId: factory.id
       }
     },
     update: {
+      active: true,
+      isPrimary: true,
       outsourcerId: null
     },
     create: {
       userId: adminUser.id,
       factoryId: factory.id,
-      roleId: adminRole.id,
+      active: true,
+      isPrimary: true,
       outsourcerId: null
+    }
+  });
+
+  await prisma.usersRole.upsert({
+    where: {
+      userId_roleId: {
+        userId: adminUser.id,
+        roleId: adminRole.id
+      }
+    },
+    update: {},
+    create: {
+      userId: adminUser.id,
+      roleId: adminRole.id
     }
   });
 }

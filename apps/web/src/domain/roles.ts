@@ -52,6 +52,10 @@ const moduleLabels: Record<ModuleKey, string> = {
   adminUsers: "Пользователи и роли"
 };
 
+export function moduleLabel(key: ModuleKey) {
+  return moduleLabels[key];
+}
+
 export function moduleLabelForRole(key: ModuleKey, role: RoleKey) {
   if (key === "plans") {
     if (role === "hr") return "HR.План";

@@ -116,7 +116,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
                     <Td strong>{user.fullName}</Td>
                     <Td>{user.email || user.login}</Td>
                     <Td>{user.role}</Td>
-                    <Td>{user.factoryName || user.factoryId}</Td>
+                    <Td>{user.factoryName || "Фабрика не указана"}</Td>
                     <Td className={user.status === "inactive" ? "font-black text-red-700" : "font-black text-refGreen"}>{user.status === "inactive" ? "заблокирован" : "активен"}</Td>
                     <Td className={user.status === "inactive" ? "text-red-700" : ""}>{formatActivity(user.lastActivityAt)}</Td>
                   </tr>
@@ -134,7 +134,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
           <h2 className="font-black text-refDark">Быстрое редактирование выбранного пользователя</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <ActionChip>Роль: hr</ActionChip>
-            <ActionChip tone="green">Фабрика: {profile?.factoryId || "factory_ref"}</ActionChip>
+            <ActionChip tone="green">Фабрика: {profile?.factoryName || "Рефтинская"}</ActionChip>
             <ActionChip tone="green">Статус: активен</ActionChip>
           </div>
         </div>
