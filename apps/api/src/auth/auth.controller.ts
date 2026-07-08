@@ -6,7 +6,7 @@ import type { AccessTokenPayload, ApiLoginResponse, AuthenticatedRequest, OkResp
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
-import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto, ResetPasswordDto } from "./dto/auth.dto";
+import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto, ResetPasswordDto, SelectFactoryDto } from "./dto/auth.dto";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -25,6 +25,13 @@ export class AuthController {
   @HttpCode(200)
   refresh(@Body() dto: RefreshDto): Promise<ApiLoginResponse> {
     return this.authService.refresh(dto);
+  }
+
+  @ApiBearerAuth()
+  @Post("select-factory")
+  @HttpCode(200)
+  selectFactory(@CurrentUser() user: AccessTokenPayload, @Body() dto: SelectFactoryDto, @Req() request: Request): Promise<ApiLoginResponse> {
+    return this.authService.selectFactory(user, dto.factoryId, requestMeta(request));
   }
 
   @ApiBearerAuth()

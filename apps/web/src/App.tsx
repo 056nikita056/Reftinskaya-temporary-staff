@@ -11,7 +11,7 @@ import {
   UserCircle,
   Users
 } from "lucide-react";
-import { accessForRole, api, BootstrapData, clearAuthTokens, CurrentUserProfile, Factory, hasAuthTokens, RoleAccess, type AccessAction, type AccessModule, RoleKey } from "./api/client";
+import { accessForRole, api, BootstrapData, clearAuthTokens, CurrentUserProfile, Factory, hasAuthTokens, LoginResponse, RoleAccess, type AccessAction, type AccessModule, RoleKey } from "./api/client";
 import { useBootstrap } from "./api/useBootstrap";
 import { Empty } from "./components/common";
 import { AdminUsers } from "./features/block1/AdminUsers";
@@ -302,6 +302,13 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [pending, setPending] = useState<{
+    response: LoginResponse;
+    role: RoleKey;
+    roles: RoleKey[];
+    access: RoleAccess;
+    factories: Factory[];
+  } | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -312,6 +319,12 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
       const nextRole = result.user?.role || result.role;
       const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : [nextRole];
       const nextAccess = result.user?.access || result.permissions || accessForRoles(nextRoles);
+      const factories = (result.user?.factories?.length ? [...result.user.factories] : result.factories?.length ? [...result.factories] : [])
+        .filter((factory) => factory.active);
+      if (factories.length > 1) {
+        setPending({ response: result, role: nextRole, roles: nextRoles, access: nextAccess, factories });
+        return;
+      }
       localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
       onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id, result.user?.factory || result.factory);
     } catch (err) {
@@ -320,6 +333,49 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
       setSubmitting(false);
     }
   };
+
+  const selectFactory = async (factory: Factory) => {
+    if (!pending || submitting) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      const currentFactoryId = pending.response.user?.factoryId || pending.response.factory?.id;
+      const result = factory.id === currentFactoryId ? pending.response : await api.selectFactory(factory.id);
+      const nextRole = result.user?.role || result.role || pending.role;
+      const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : pending.roles;
+      const nextAccess = result.user?.access || result.permissions || pending.access;
+      localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
+      onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id || factory.id, result.user?.factory || result.factory || factory);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось выбрать фабрику");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const backToLogin = () => {
+    setSubmitting(true);
+    api.logout().catch(() => undefined).finally(() => {
+      clearAuthTokens();
+      setPending(null);
+      setPassword("");
+      setError("");
+      setSubmitting(false);
+    });
+  };
+
+  if (pending) {
+    return (
+      <FactoryChoice
+        factories={pending.factories}
+        selectedFactoryId={pending.response.user?.factoryId || pending.response.factory?.id}
+        submitting={submitting}
+        error={error}
+        onSelect={selectFactory}
+        onBack={backToLogin}
+      />
+    );
+  }
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
@@ -340,6 +396,44 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Входим..." : "Войти"}</button>
         </form>
+      </section>
+    </main>
+  );
+}
+
+function FactoryChoice({ factories, selectedFactoryId, submitting, error, onSelect, onBack }: { factories: Factory[]; selectedFactoryId?: string; submitting: boolean; error: string; onSelect: (factory: Factory) => void; onBack: () => void }) {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
+      <section className="w-full max-w-[520px] rounded-2xl bg-white p-6 shadow-panel">
+        <div className="mb-5">
+          <h1 className="text-2xl font-black leading-tight text-refDark">Выберите фабрику</h1>
+          <p className="mt-1 text-sm font-bold text-slate-500">Доступно несколько рабочих областей</p>
+        </div>
+        <div className="grid gap-2">
+          {factories.map((factory) => (
+            <button
+              key={factory.id}
+              className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-70 ${factory.id === selectedFactoryId ? "border-refGreen bg-emerald-50" : "border-slate-200 bg-slate-50 hover:border-refGreen hover:bg-emerald-50/60"}`}
+              disabled={submitting}
+              onClick={() => onSelect(factory)}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-refGreen shadow-sm">
+                  <FactoryIcon size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black text-refDark">{factory.name}</span>
+                  <span className="block truncate text-xs font-bold text-slate-500">{factory.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</span>
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-black text-refGreen">{factory.id === selectedFactoryId ? "Основная" : ""}</span>
+            </button>
+          ))}
+        </div>
+        {error && <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
+        <button className="mt-4 rounded-md bg-slate-200 px-4 py-2 text-sm font-black text-slate-700" disabled={submitting} onClick={onBack}>
+          Назад
+        </button>
       </section>
     </main>
   );

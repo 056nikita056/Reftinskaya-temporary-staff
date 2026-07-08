@@ -396,6 +396,14 @@ export const api = {
     }
     return { ...response, ok: true, role: response.user?.role || response.role };
   },
+  async selectFactory(factoryId: string) {
+    const response = await coreRequest<LoginResponse>("/auth/select-factory", { method: "POST", body: { factoryId } });
+    if (response.accessToken && response.refreshToken) {
+      writeTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
+      setStorageNamespace(response.user?.id);
+    }
+    return { ...response, ok: true, role: response.user?.role || response.role };
+  },
   logout() {
     return coreRequest("/auth/logout", { method: "POST" }).finally(clearAuthTokens);
   },

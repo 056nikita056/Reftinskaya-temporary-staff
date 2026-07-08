@@ -169,6 +169,29 @@ export class AuthService {
     return response;
   }
 
+  async selectFactory(user: AccessTokenPayload, factoryId: string, meta: RequestMeta): Promise<ApiLoginResponse> {
+    const context = await this.buildSessionContext(user.sub, factoryId, user.role);
+    const now = new Date();
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId: user.sub,
+        revokedAt: null
+      },
+      data: { revokedAt: now }
+    });
+    const response = await this.issueLoginResponse(context);
+    await this.prisma.auditLog.create({
+      data: {
+        action: "select_factory",
+        userId: user.sub,
+        factoryId: context.payload.factoryId,
+        ip: meta.ip,
+        userAgent: meta.userAgent
+      }
+    });
+    return response;
+  }
+
   async logout(user: AccessTokenPayload, meta: RequestMeta): Promise<OkResponse> {
     const now = new Date();
     await this.prisma.$transaction([

@@ -17,6 +17,12 @@ export class RefreshDto {
   refreshToken!: string;
 }
 
+export class SelectFactoryDto {
+  @ApiProperty()
+  @IsString()
+  factoryId!: string;
+}
+
 export class ForgotPasswordDto {
   @ApiProperty({ example: "admin" })
   @IsString()
