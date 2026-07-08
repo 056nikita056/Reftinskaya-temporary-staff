@@ -456,9 +456,8 @@ export class AuthService {
       });
     }
 
-    const primaryMembership =
-      memberships.find((item) => item.factoryId === factoryId) ?? memberships.find((item) => item.isPrimary) ?? memberships[0];
-    if (!primaryMembership) {
+    const selectedMembership = memberships.find((item) => item.factoryId === factoryId);
+    if (!selectedMembership) {
       throw new ForbiddenException({
         code: "FACTORY_NOT_AVAILABLE",
         message: "Фабрика больше недоступна"
@@ -468,13 +467,13 @@ export class AuthService {
     return {
       payload: {
         sub: user.id,
-        factoryId: primaryMembership.factoryId,
+        factoryId: selectedMembership.factoryId,
         role,
         roles,
         login: user.login,
         fullName: user.profile?.fullName ?? user.login
       },
-      factory: this.mapFactory(primaryMembership.factory),
+      factory: this.mapFactory(selectedMembership.factory),
       factories: memberships.map((item) => this.mapFactory(item.factory)),
       roles,
       mustChangePassword: user.mustChangePassword
