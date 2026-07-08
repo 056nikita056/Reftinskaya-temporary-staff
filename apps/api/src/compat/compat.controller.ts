@@ -349,7 +349,8 @@ export class CompatController {
 
   private async createPlanOperation(factoryId: string, body: Record<string, unknown>): Promise<MutationDelta> {
     const planId = requiredString(body.plan_id, "PLAN_REQUIRED");
-    await this.requirePlan(factoryId, planId);
+    const plan = await this.requirePlanWithStatus(factoryId, planId);
+    assertPlanOperationMutationStatus("POST", {}, plan.status);
     const created = await this.prisma.planOperation.create({
       data: {
         ...(await this.planOperationCreateInput(factoryId, body)),
@@ -370,7 +371,8 @@ export class CompatController {
   }
 
   private async updatePlanOperation(factoryId: string, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
-    await this.requirePlanOperation(factoryId, id);
+    const existing = await this.requirePlanOperationWithPlanStatus(factoryId, id);
+    assertPlanOperationMutationStatus("PUT", body, existing.plan.status);
     const data: Record<string, unknown> = {};
     if ("section_id" in body) {
       data.territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
@@ -402,7 +404,8 @@ export class CompatController {
   }
 
   private async deletePlanOperation(factoryId: string, id: string): Promise<MutationDelta> {
-    await this.requirePlanOperation(factoryId, id);
+    const existing = await this.requirePlanOperationWithPlanStatus(factoryId, id);
+    assertPlanOperationMutationStatus("DELETE", {}, existing.plan.status);
     await this.prisma.planOperation.delete({ where: { id } });
     return {
       ok: true,
@@ -633,6 +636,22 @@ export class CompatController {
     return operation;
   }
 
+  private async requirePlanOperationWithPlanStatus(factoryId: string, id: string) {
+    const operation = await this.prisma.planOperation.findFirst({
+      where: {
+        id,
+        plan: { factoryId }
+      },
+      include: {
+        plan: {
+          include: { status: true }
+        }
+      }
+    });
+    if (!operation) throwNotFound("operations", id);
+    return operation;
+  }
+
   private async requireSection(factoryId: string, id: string) {
     const section = await this.prisma.territoryTree.findFirst({ where: { id, factoryId } });
     if (!section) throwNotFound("sections", id);
@@ -848,6 +867,32 @@ function assertPlanStatusTransition(current: { code: string; title: string }, ne
       message: `Недопустимый переход статуса плана: ${current.title} -> ${next.title}`
     });
   }
+}
+
+function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, status: { code: string; title: string }): void {
+  if (method === "POST" || method === "DELETE") {
+    assertPlanStatusIn(status, ["draft"], "PLAN_OPERATION_STATUS_LOCKED", "Строки плана можно добавлять и удалять только в статусе «В доработке»");
+    return;
+  }
+
+  if ("name" in body || "operation_id" in body || "section_id" in body || "section_name" in body || "required_staff" in body) {
+    assertPlanStatusIn(status, ["draft"], "PLAN_OPERATION_STATUS_LOCKED", "Фабричные поля строки плана можно менять только в статусе «В доработке»");
+  }
+  if ("staff_count" in body || "outsource_count" in body) {
+    assertPlanStatusIn(status, ["submitted_to_hr", "received_by_outsourcer"], "PLAN_OPERATION_STATUS_LOCKED", "HR-поля строки плана можно менять только на HR-этапе");
+  }
+  if ("hours_per_day" in body || "rate_per_hour" in body) {
+    assertPlanStatusIn(status, ["received_by_outsourcer", "rejected"], "PLAN_OPERATION_STATUS_LOCKED", "Поля аутсорсинга можно менять только на этапе аутсорсера");
+  }
+}
+
+function assertPlanStatusIn(status: { code: string; title: string }, allowedCodes: string[], code: string, message: string): void {
+  if (allowedCodes.includes(status.code)) return;
+  throw new BadRequestException({
+    code,
+    message,
+    status: status.title
+  });
 }
 
 function actionsForOperationMutation(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>): AccessAction[] {
