@@ -2,7 +2,6 @@
   "name": "@reftinskaya/contracts",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",

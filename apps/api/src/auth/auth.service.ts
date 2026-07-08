@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import type { Prisma } from "@prisma/client";
 import { accessForRole, USER_ROLES, type Factory, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
 import bcrypt from "bcrypt";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -16,6 +17,19 @@ const LOCK_DURATION_MS = 15 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const BCRYPT_ROUNDS = 12;
 const userRoleSet = new Set<string>(USER_ROLES);
+const sessionUserInclude = {
+  profile: true,
+  usersFactories: {
+    include: {
+      factory: true
+    }
+  },
+  usersRoles: {
+    include: {
+      role: true
+    }
+  }
+} satisfies Prisma.UserInclude;
 
 type RequestMeta = {
   ip?: string;
@@ -55,17 +69,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { login: dto.login },
       include: {
-        profile: true,
-        usersFactories: {
-          include: {
-            factory: true
-          }
-        },
-        usersRoles: {
-          include: {
-            role: true
-          }
-        }
+        ...sessionUserInclude
       }
     });
 
@@ -436,17 +440,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        profile: true,
-        usersFactories: {
-          include: {
-            factory: true
-          }
-        },
-        usersRoles: {
-          include: {
-            role: true
-          }
-        }
+        ...sessionUserInclude
       }
     });
     if (!user?.active) {
