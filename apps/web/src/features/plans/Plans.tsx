@@ -225,8 +225,12 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
 }
 
 function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean> }) {
+  const [selectedPlanId, setSelectedPlanId] = useState("");
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+  const selectedEditAccess = selectedPlan ? editAccessForPlan(access, selectedPlan, kind) : undefined;
+  const selectedSendKind = selectedPlan && selectedEditAccess ? sendKindForPlan(selectedEditAccess, selectedPlan) : null;
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
   const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
   const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
@@ -311,7 +315,17 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
   };
   return (
-    <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
+    <div className="rounded-lg border border-slate-300 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase text-slate-500">Выбранный план</p>
+          <p className="truncate text-sm font-black text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
+        </div>
+        <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
+          <Send size={16} /> Отправить
+        </button>
+      </div>
+      <div className="overflow-auto">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-black uppercase text-slate-500">
           <tr>
@@ -330,11 +344,10 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           {plans.flatMap((plan) => {
             const rows = operations.filter((operation) => operation.plan_id === plan.id);
             const editAccess = editAccessForPlan(access, plan, kind);
-            const sendKind = sendKindForPlan(editAccess, plan);
             const displayStatus = displayPlanStatus(plan, kind, access);
             const planRows = rows.length ? rows : [undefined];
             return planRows.map((operation, index) => (
-              <tr key={`${plan.id}-${operation?.id || "empty"}`} className="border-t border-slate-200 hover:bg-emerald-50/30">
+              <tr key={`${plan.id}-${operation?.id || "empty"}`} className={`border-t border-slate-200 hover:bg-emerald-50/30 ${selectedPlanId === plan.id ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`} onClick={() => setSelectedPlanId(plan.id)}>
                 <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
@@ -346,7 +359,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td>
                   <div className="flex justify-center gap-1">
                     {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
-                    {index === 0 && sendKind && <IconAction title="Отправить план" onClick={() => sendPlan(plan)}><Send size={15} /></IconAction>}
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><CopyPlus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(plan, operation)}><Trash2 size={15} /></IconAction>}
@@ -370,6 +382,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
   );
 }
