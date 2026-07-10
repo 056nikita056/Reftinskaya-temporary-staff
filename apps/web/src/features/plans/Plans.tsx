@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
-import { Copy, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
+import { Copy, CopyPlus, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ToastTone, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
@@ -286,7 +286,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                   <div className="flex justify-center gap-1">
                     {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
-                    {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><Copy size={15} /></IconAction>}
+                    {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><CopyPlus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(operation)}><Trash2 size={15} /></IconAction>}
                   </div>
                 </Td>
