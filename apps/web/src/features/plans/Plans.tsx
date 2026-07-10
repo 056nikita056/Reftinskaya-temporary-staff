@@ -197,7 +197,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-black">Планы</h2>
+        <h2 className="text-xl font-normal">Планы</h2>
         {access.factory && (
           <button className="btn-primary gap-2 disabled:bg-slate-300" disabled={creatingPlan} onClick={createPlanInList}>
             <Plus size={17} /> {creatingPlan ? "Создание..." : "План"}
@@ -340,8 +340,8 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     <div className="rounded-lg border border-slate-300 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase text-slate-500">Выбранный план</p>
-          <p className="truncate text-sm font-black text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
+          <p className="text-xs font-normal uppercase text-slate-500">Выбранный план</p>
+          <p className="truncate text-sm font-normal text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <ToolbarAction title={selectedOperation ? "Копировать запись" : "Копировать план"} disabled={!selectedPlan || !access.factory || (Boolean(selectedOperation) && !selectedEditAccess?.factory)} onClick={() => selectedPlan && (selectedOperation ? createOperation(selectedPlan, selectedOperation) : copyPlan(selectedPlan))}>
@@ -360,7 +360,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       </div>
       <div className="overflow-auto">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-black uppercase text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-normal uppercase text-slate-500">
           <tr>
             <Th>Начало</Th>
             <Th>Окончание</Th>
@@ -413,9 +413,9 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                   </div>
                 </Td>
                 <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
-                <Td><span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span></Td>
-                <Td><span className="font-black text-refDark">План</span></Td>
-                <Td><span className="text-xs font-black text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
+                <Td><span className={`font-normal ${statusTone(displayStatus)}`}>{displayStatus}</span></Td>
+                <Td><span className="font-normal text-refDark">План</span></Td>
+                <Td><span className="text-xs font-normal text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
                 <Td numeric>{planRequired}</Td>
                 <Td numeric>{planStaff}</Td>
                 <Td numeric>{planOutsource}</Td>
@@ -443,7 +443,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             return [planRow, ...operationRows];
           })}
         </tbody>
-        <tfoot className="sticky bottom-0 bg-slate-100 font-black text-refDark">
+        <tfoot className="sticky bottom-0 bg-slate-100 font-normal text-refDark">
           <tr className="border-t-2 border-slate-300">
             <Td>Итого</Td>
             <Td>{""}</Td>
@@ -489,7 +489,7 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
 
   return (
     <>
-      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-center text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
+      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-center text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
         {label}
       </button>
       {open && (
@@ -514,7 +514,7 @@ function ToolbarAction({ children, title, primary, danger, disabled, onClick }: 
       ? "bg-refGreen text-white hover:bg-emerald-800 disabled:bg-slate-300 disabled:text-white"
       : "bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:text-slate-400";
   return (
-    <button className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition disabled:cursor-not-allowed ${tone}`} type="button" title={title} disabled={disabled} onClick={onClick}>
+    <button className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-normal transition disabled:cursor-not-allowed ${tone}`} type="button" title={title} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );
@@ -523,10 +523,10 @@ function ToolbarAction({ children, title, primary, danger, disabled, onClick }: 
 function PlanDateInput({ value, editable, onSave }: { value: string; editable: boolean; onSave: (value: string) => Promise<unknown> }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
-  if (!editable) return <span className="font-semibold">{value}</span>;
+  if (!editable) return <span className="font-normal">{value}</span>;
   return (
     <input
-      className="h-8 w-28 rounded border border-slate-300 px-2 text-center font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      className="h-8 w-28 rounded border border-slate-300 px-2 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => draft !== value && onSave(draft)}
@@ -537,10 +537,10 @@ function PlanDateInput({ value, editable, onSave }: { value: string; editable: b
 function NumberCell({ value, editable, onSave }: { value: number; editable: boolean; onSave: (value: number) => Promise<unknown> }) {
   const [draft, setDraft] = useState(String(value ?? 0));
   useEffect(() => setDraft(String(value ?? 0)), [value]);
-  if (!editable) return <span className="font-black">{value ?? 0}</span>;
+  if (!editable) return <span className="font-normal">{value ?? 0}</span>;
   return (
     <input
-      className="h-8 w-20 rounded border border-slate-300 px-2 text-center font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      className="h-8 w-20 rounded border border-slate-300 px-2 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
       inputMode="numeric"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
@@ -557,7 +557,7 @@ function Th({ children }: { children: string; numeric?: boolean }) {
 }
 
 function Td({ children, numeric }: { children: ReactNode; numeric?: boolean }) {
-  return <td className={`border-r border-slate-200 px-2 py-1.5 text-center align-middle font-semibold last:border-r-0 ${numeric ? "tabular-nums" : ""}`}>{children}</td>;
+  return <td className={`border-r border-slate-200 px-2 py-1.5 text-center align-middle font-normal last:border-r-0 ${numeric ? "tabular-nums" : ""}`}>{children}</td>;
 }
 
 function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
@@ -627,7 +627,7 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={cancel}>Назад</button>
+        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={cancel}>Назад</button>
       </div>
       <PlanHeader plan={plan} displayStatus={displayPlanStatusForRole(plan, "factory")} dates={dates} setDates={setDates} edit />
       <PlanFlowNotice kind="factory" plan={plan} />
@@ -642,7 +642,7 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
         onAddOperation={() => setDrafts([...drafts, createDraftOperation(drafts.length + 1)])}
       />
       <div className="mt-2 flex items-center justify-end gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
-        <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={saving} onClick={save}>
+        <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-normal disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500" disabled={saving} onClick={save}>
           <Save size={16} className="inline" /> {saving ? "Сохранение..." : "Сохранить"}
         </button>
       </div>
@@ -826,15 +826,15 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
+        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
         <div className="flex gap-2">
-          {access.admin && <button className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-black text-red-600 hover:bg-red-100" onClick={deletePlan}><Trash2 size={16} /> Удалить</button>}
+          {access.admin && <button className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-normal text-red-600 hover:bg-red-100" onClick={deletePlan}><Trash2 size={16} /> Удалить</button>}
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
       <PlanHeader plan={plan} displayStatus={displayPlanStatus(plan, kind, access)} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
       <PlanFlowNotice kind={kind} plan={plan} />
-      {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
+      {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-normal text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
         <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} operationCatalog={data.operationCatalog || []} drafts={drafts} setDrafts={setDrafts} planId={plan.id} onRemoveOperation={removeOperation} />
       ) : (
@@ -844,14 +844,14 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
           {canDeletePlan && !access.admin && <button className="rounded-md p-2 text-red-600" onClick={deletePlan}><Trash2 /></button>}
           <div className="ml-auto flex gap-2">
-            <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-black" onClick={save}><Save size={16} className="inline" /> Сохранить</button>
+            <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-normal" onClick={save}><Save size={16} className="inline" /> Сохранить</button>
             <button className="btn-primary gap-2" onClick={send}><Send size={16} /> Отправить</button>
           </div>
         </div>
       )}
       {!isEdit && access.outApprove && planStatusCode(plan) === "on_approval" && (
         <div className="mt-2 grid gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 shadow-sm sm:grid-cols-2">
-          <button className="h-11 rounded-md bg-orange-500 px-4 text-sm font-black text-white" onClick={returnOutsourcePlan}>
+          <button className="h-11 rounded-md bg-orange-500 px-4 text-sm font-normal text-white" onClick={returnOutsourcePlan}>
             Вернуть аутсорсеру
           </button>
           <button className="btn-primary" onClick={approveOutsourcePlan}>
@@ -872,7 +872,7 @@ function PlanFlowNotice({ kind, plan }: { kind: PlanKind; plan: Plan }) {
       ? "После распределения временного персонала план уйдет на согласование."
       : text;
   return (
-    <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800">
+    <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-normal text-blue-800">
       {body}
     </div>
   );
@@ -883,17 +883,17 @@ function PlanHeader({ plan, displayStatus = internalPlanStatusLabel(plan), dates
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
         <div className="grid gap-2 md:grid-cols-[12rem_12rem_1fr]">
-          <label className="text-[11px] font-black uppercase text-slate-500">
+          <label className="text-[11px] font-normal uppercase text-slate-500">
             Начало работ
-            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.start_date} onChange={(e) => setDates({ ...dates, start_date: e.target.value })} />
+            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.start_date} onChange={(e) => setDates({ ...dates, start_date: e.target.value })} />
           </label>
-          <label className="text-[11px] font-black uppercase text-slate-500">
+          <label className="text-[11px] font-normal uppercase text-slate-500">
             Окончание работ
-            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.end_date} onChange={(e) => setDates({ ...dates, end_date: e.target.value })} />
+            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.end_date} onChange={(e) => setDates({ ...dates, end_date: e.target.value })} />
           </label>
-          <div className="text-[11px] font-black uppercase text-slate-500">
+          <div className="text-[11px] font-normal uppercase text-slate-500">
             Статус
-            <div className="mt-1 flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-black normal-case text-refDark">{displayStatus}</div>
+            <div className="mt-1 flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-normal normal-case text-refDark">{displayStatus}</div>
           </div>
         </div>
       </div>
@@ -901,7 +901,7 @@ function PlanHeader({ plan, displayStatus = internalPlanStatusLabel(plan), dates
   }
   return (
     <div className="rounded-lg bg-refGreen p-3 text-white">
-      <div className="grid grid-cols-3 gap-2 text-center text-xs font-black">
+      <div className="grid grid-cols-3 gap-2 text-center text-xs font-normal">
         <div>Начало работ<br />{edit ? <input className="mt-1 w-full rounded px-2 py-1 text-center text-refDark" value={dates.start_date} onChange={(e) => setDates({ ...dates, start_date: e.target.value })} /> : plan.start_date}</div>
         <div>Окончание работ<br />{edit ? <input className="mt-1 w-full rounded px-2 py-1 text-center text-refDark" value={dates.end_date} onChange={(e) => setDates({ ...dates, end_date: e.target.value })} /> : plan.end_date}</div>
         <div>Статус<br />{displayStatus}</div>
@@ -950,11 +950,11 @@ function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back 
 
   return (
     <div className="space-y-3">
-      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
+      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
       <PlanHeader plan={plan} dates={{ start_date: plan.start_date, end_date: plan.end_date }} setDates={() => undefined} edit={false} />
       <SectionTitle title={displayOperationName(operation.name)} count={operationAssignments.length} />
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-        <div className="grid gap-2 text-xs font-black text-slate-600 md:grid-cols-4">
+        <div className="grid gap-2 text-xs font-normal text-slate-600 md:grid-cols-4">
           <Readonly label="Участок" value={displaySectionName(operation.section_name)} />
           <Readonly label="Требуется аутсорсинг" value={calculateOutsource(operation.required_staff, operation.staff_count)} />
           <Readonly label="Назначено" value={operationAssignments.length} />
@@ -965,8 +965,8 @@ function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back 
       <div className="space-y-2">
         {slots.map((slot, index) => (
           <div key={`${operationId}-${index}`} className="grid grid-cols-[36px_1fr_auto] items-center gap-2 rounded-md border border-slate-300 bg-white p-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 text-sm font-black">{index + 1}</div>
-            <button className="min-h-9 rounded-md border border-slate-300 bg-slate-50 px-3 text-left text-sm font-bold hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70" disabled={!editable} onClick={() => setPickerSlot(index)}>
+            <div className="flex h-8 w-8 items-center justify-center rounded border border-slate-300 text-sm font-normal">{index + 1}</div>
+            <button className="min-h-9 rounded-md border border-slate-300 bg-slate-50 px-3 text-left text-sm font-normal hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-70" disabled={!editable} onClick={() => setPickerSlot(index)}>
               {slot?.employee ? displayEmployeeName(slot.employee) : "Не выбрано"}
             </button>
             {slot?.assignment ? (
@@ -981,7 +981,7 @@ function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back 
       </div>
 
       {!editable && (
-        <div className="rounded-md bg-slate-100 p-3 text-sm font-bold text-slate-600">
+        <div className="rounded-md bg-slate-100 p-3 text-sm font-normal text-slate-600">
           {canEditOut ? `План сейчас: ${internalPlanStatusLabel(plan)}. Распределение доступно только когда план у аутсорсера.` : "Нет права на распределение аутсорсинга."}
         </div>
       )}
@@ -1023,15 +1023,15 @@ function PersonnelPicker({ data, assignedIds, period, select, close }: { data: B
       <div className="max-h-[55vh] space-y-2 overflow-auto pr-1">
         {candidates.map(({ employee, busy }) => (
           <button key={employee.id} className={`w-full rounded-md p-3 text-left ${busy ? "cursor-not-allowed bg-slate-100 opacity-70" : "bg-slate-100 hover:bg-emerald-50"}`} disabled={Boolean(busy)} onClick={() => select(employee)}>
-            <p className="text-sm font-black">{displayEmployeeName(employee)}</p>
-            <p className="text-xs font-bold text-slate-500">{displayEmployeeMeta(employee)}</p>
-            <p className={`mt-1 text-xs font-black ${busy ? "text-orange-600" : statusTone(employee.status)}`}>{busy ? `Занят до ${busy.end_at}` : employee.status}</p>
+            <p className="text-sm font-normal">{displayEmployeeName(employee)}</p>
+            <p className="text-xs font-normal text-slate-500">{displayEmployeeMeta(employee)}</p>
+            <p className={`mt-1 text-xs font-normal ${busy ? "text-orange-600" : statusTone(employee.status)}`}>{busy ? `Занят до ${busy.end_at}` : employee.status}</p>
           </button>
         ))}
         {!candidates.length && <Empty text="Нет сотрудников для выбранного периода. Добавьте людей в базе персонала." />}
       </div>
       <div className="mt-3 flex justify-end gap-2">
-        <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-black text-white" onClick={close}>Отменить</button>
+        <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-normal text-white" onClick={close}>Отменить</button>
       </div>
     </Modal>
   );
@@ -1055,7 +1055,7 @@ function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], dr
         </div>
       </div>
       {(editAccess?.factory ?? kind === "factory") && (
-        <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-white" onClick={addOperation}>
+        <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-normal text-white" onClick={addOperation}>
           <Plus size={16} className="inline" /> Операция
         </button>
       )}

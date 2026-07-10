@@ -42,7 +42,7 @@ export function PersonnelV2({ view, setView, data, mutate, loadMore }: { view: V
           onClick={() => setFiltersOpen((current) => !current)}
         >
           <Menu size={18} />
-          {activeFilters > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-refGreen px-1 text-[10px] font-black text-white">{activeFilters}</span>}
+          {activeFilters > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-refGreen px-1 text-[10px] font-normal text-white">{activeFilters}</span>}
         </button>
       </div>
       {filtersOpen && (
@@ -53,7 +53,7 @@ export function PersonnelV2({ view, setView, data, mutate, loadMore }: { view: V
             <SelectFilter label="Жилье" value={housingFilter} options={["Все", "Нуждается в жилье", "Жилье не требуется"]} onChange={setHousingFilter} />
           </div>
           {activeFilters > 0 && (
-            <button className="mt-3 text-xs font-black text-refGreen underline" onClick={() => { setStatusFilter("Все"); setCountryFilter("Все"); setHousingFilter("Все"); }}>
+            <button className="mt-3 text-xs font-normal text-refGreen underline" onClick={() => { setStatusFilter("Все"); setCountryFilter("Все"); setHousingFilter("Все"); }}>
               Сбросить фильтры
             </button>
           )}
@@ -64,7 +64,7 @@ export function PersonnelV2({ view, setView, data, mutate, loadMore }: { view: V
       </div>
       {!employees.length && <Empty text="Сотрудники не найдены" />}
       {data.pagination?.employees.nextCursor && (
-        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-black text-refGreen hover:bg-emerald-50" onClick={() => loadMore("employees")}>
+        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-normal text-refGreen hover:bg-emerald-50" onClick={() => loadMore("employees")}>
           Загрузить еще
         </button>
       )}
@@ -90,7 +90,7 @@ export function PersonnelV2({ view, setView, data, mutate, loadMore }: { view: V
 
 function SelectFilter({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
-    <label className="text-xs font-black text-slate-500">
+    <label className="text-xs font-normal text-slate-500">
       {label}
       <select className="field mt-1 h-9 bg-white" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => <option key={option}>{option}</option>)}
@@ -105,13 +105,13 @@ function EmployeeCardV2({ employee, onClick }: { employee: Employee; onClick: ()
     <button className="w-full rounded-xl bg-slate-100 p-4 text-left shadow-sm transition hover:bg-slate-200" onClick={onClick}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-black">{displayEmployeeName(employee)}</p>
-          <p className="text-xs font-bold text-slate-600">{displayEmployeeMeta(employee)}</p>
-          <p className={`mt-3 text-xs font-black ${missing.length ? "text-orange-600" : "text-refGreen"}`}>
+          <p className="truncate font-normal">{displayEmployeeName(employee)}</p>
+          <p className="text-xs font-normal text-slate-600">{displayEmployeeMeta(employee)}</p>
+          <p className={`mt-3 text-xs font-normal ${missing.length ? "text-orange-600" : "text-refGreen"}`}>
             {missing.length ? `Профиль требует заполнения: ${missing.join(", ")}` : "Профиль заполнен"}
           </p>
         </div>
-        <span className={`shrink-0 text-xs font-black ${statusTone(employee.status)}`}>{employee.status || "Статус"}</span>
+        <span className={`shrink-0 text-xs font-normal ${statusTone(employee.status)}`}>{employee.status || "Статус"}</span>
       </div>
     </button>
   );
@@ -148,7 +148,7 @@ function EmployeeProfileV2({ employeeId, edit, data, mutate, back, openEdit, clo
 
   return (
     <div className="relative space-y-3 pb-2">
-      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
+      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
       <EmployeeHeroV2 employee={draft} />
 
       {isEdit ? (
@@ -200,7 +200,7 @@ function EmployeeProfileV2({ employeeId, edit, data, mutate, back, openEdit, clo
           <EmployeeSectionTitleV2 title="Контактная информация" />
           <EmployeeFieldV2 label="Номер телефона" value={draft.phone || ""} onChange={(value) => setDraft({ ...draft, phone: value })} />
           <EmployeeFieldV2 label="Почта" value={draft.email || ""} onChange={(value) => setDraft({ ...draft, email: value })} />
-          <button className="fixed bottom-20 right-5 z-20 rounded-full bg-refGreen px-5 py-3 text-sm font-black text-white shadow-panel" onClick={save}>
+          <button className="fixed bottom-20 right-5 z-20 rounded-full bg-refGreen px-5 py-3 text-sm font-normal text-white shadow-panel" onClick={save}>
             Сохранить
           </button>
         </div>
@@ -228,7 +228,7 @@ function EmployeeProfileV2({ employeeId, edit, data, mutate, back, openEdit, clo
             <EmployeeReadonlyLineV2 label="Номер телефона" value={employee.phone || "-"} />
             <EmployeeReadonlyLineV2 label="Почта" value={employee.email || "-"} />
           </EmployeeAccordionV2>
-          <p className="mx-auto max-w-xs pt-5 text-center text-sm font-bold text-slate-500">История работ появится после фиксации смен</p>
+          <p className="mx-auto max-w-xs pt-5 text-center text-sm font-normal text-slate-500">История работ появится после фиксации смен</p>
           <button className="fixed bottom-20 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-refGreen text-white shadow-panel" onClick={openEdit} title="Редактировать">
             <Pencil size={24} />
           </button>
@@ -245,8 +245,8 @@ function EmployeeHeroV2({ employee }: { employee: Employee }) {
         <div className="absolute left-1/2 top-0 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-orange-100 text-orange-500">
           <UserRound size={34} />
         </div>
-        <h2 className="text-lg font-black">{displayEmployeeName(employee)}</h2>
-        <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs font-bold">
+        <h2 className="text-lg font-normal">{displayEmployeeName(employee)}</h2>
+        <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs font-normal">
           <span className="rounded-full border border-white/70 px-3 py-1">{displayEmployeeAge(employee)}</span>
           <span className="rounded-full border border-white/70 px-3 py-1">{cleanDisplayValue(employee.country, emptyCountries) || "Страна не указана"}</span>
           <span className="rounded-full border border-white/70 px-3 py-1">{employee.status || "Статус"}</span>
@@ -257,23 +257,23 @@ function EmployeeHeroV2({ employee }: { employee: Employee }) {
 }
 
 function EmployeeSectionTitleV2({ title }: { title: string }) {
-  return <div className="rounded-md bg-slate-200 px-3 py-2 text-center text-sm font-black">{title}</div>;
+  return <div className="rounded-md bg-slate-200 px-3 py-2 text-center text-sm font-normal">{title}</div>;
 }
 
 function EmployeeFieldV2({ label, value, onChange }: { label: string; value: string | number; onChange: (value: string) => void }) {
   return (
-    <label className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-black">
+    <label className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right leading-tight">{label}</span>
-      <input className="h-8 rounded-md border border-slate-400 px-3 text-sm font-bold" value={value} onChange={(event) => onChange(event.target.value)} />
+      <input className="h-8 rounded-md border border-slate-400 px-3 text-sm font-normal" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
 
 function EmployeeFileFieldV2({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-black">
+    <div className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right leading-tight">{label}</span>
-      <div className="flex h-8 items-center justify-between rounded-md border border-slate-400 px-3 text-sm font-bold text-slate-500">
+      <div className="flex h-8 items-center justify-between rounded-md border border-slate-400 px-3 text-sm font-normal text-slate-500">
         <span>{value}</span>
         <Paperclip size={16} />
       </div>
@@ -284,22 +284,22 @@ function EmployeeFileFieldV2({ label, value }: { label: string; value: string })
 function EmployeeCheckFieldV2({ label, checked, value, badWhenFalse, onToggle, onChange }: { label: string; checked?: boolean; value: string; badWhenFalse?: boolean; onToggle: () => void; onChange: (value: string) => void }) {
   const isBad = !checked && badWhenFalse;
   return (
-    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-black">
+    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right text-xs leading-tight">{label}</span>
       <button className={`flex h-7 w-7 items-center justify-center rounded-md text-white ${checked ? "bg-refGreen" : isBad ? "bg-red-600" : "bg-slate-300"}`} onClick={onToggle}>
         {checked ? <Check size={17} /> : isBad ? <X size={17} /> : null}
       </button>
-      <input className="h-8 rounded-md border border-slate-400 px-3 text-sm font-bold" value={value} onChange={(event) => onChange(event.target.value)} />
+      <input className="h-8 rounded-md border border-slate-400 px-3 text-sm font-normal" value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
 
 function EmployeeFileCheckFieldV2({ label, checked, value }: { label: string; checked?: boolean; value: string }) {
   return (
-    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-black">
+    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right text-xs leading-tight">{label}</span>
       <span className={`flex h-7 w-7 items-center justify-center rounded-md text-white ${checked ? "bg-refGreen" : "bg-red-600"}`}>{checked ? <Check size={17} /> : <X size={17} />}</span>
-      <div className="flex h-8 items-center justify-between rounded-md border border-slate-400 px-3 text-sm font-bold text-slate-500">
+      <div className="flex h-8 items-center justify-between rounded-md border border-slate-400 px-3 text-sm font-normal text-slate-500">
         <span>{value}</span>
         <Paperclip size={16} />
       </div>
@@ -310,7 +310,7 @@ function EmployeeFileCheckFieldV2({ label, checked, value }: { label: string; ch
 function EmployeeAccordionV2({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <button className="flex w-full items-center justify-between rounded-md bg-slate-200 px-3 py-2 text-sm font-black" onClick={onToggle}>
+      <button className="flex w-full items-center justify-between rounded-md bg-slate-200 px-3 py-2 text-sm font-normal" onClick={onToggle}>
         <span className="flex-1 text-center">{title}</span>
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/70 text-slate-700">
           {open ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} strokeWidth={3} />}
@@ -323,19 +323,19 @@ function EmployeeAccordionV2({ title, open, onToggle, children }: { title: strin
 
 function EmployeeReadonlyLineV2({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-black">
+    <div className="grid grid-cols-[7.25rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right leading-tight">{label}</span>
-      <div className="min-h-8 rounded-md border border-slate-400 px-3 py-1 text-sm font-bold">{value}</div>
+      <div className="min-h-8 rounded-md border border-slate-400 px-3 py-1 text-sm font-normal">{value}</div>
     </div>
   );
 }
 
 function EmployeeReadonlyCheckLineV2({ label, checked, value = "" }: { label: string; checked: boolean; value?: string }) {
   return (
-    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-black">
+    <div className="grid grid-cols-[7.25rem_1.75rem_1fr] items-center gap-2 text-sm font-normal">
       <span className="text-right leading-tight">{label}</span>
       <span className={`flex h-7 w-7 items-center justify-center rounded-md text-white ${checked ? "bg-refGreen" : "bg-red-600"}`}>{checked ? <Check size={17} /> : <X size={17} />}</span>
-      <div className="min-h-8 rounded-md border border-slate-400 px-3 py-1 text-sm font-bold">{value}</div>
+      <div className="min-h-8 rounded-md border border-slate-400 px-3 py-1 text-sm font-normal">{value}</div>
     </div>
   );
 }

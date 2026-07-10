@@ -30,18 +30,18 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight text-refDark md:text-3xl">Профиль пользователя</h1>
-        <p className="mt-1 text-sm font-semibold text-slate-500">Профиль относится к пользовательской системе, не к карточке сотрудника.</p>
+        <h1 className="text-2xl font-normal tracking-tight text-refDark md:text-3xl">Профиль пользователя</h1>
+        <p className="mt-1 text-sm font-normal text-slate-500">Профиль относится к пользовательской системе, не к карточке сотрудника.</p>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-refGreen bg-emerald-50 text-xl font-black text-refGreen">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-refGreen bg-emerald-50 text-xl font-normal text-refGreen">
             {initials(profile.fullName)}
           </div>
           <div className="min-w-0">
-            <p className="text-xl font-black text-refDark">{profile.fullName}</p>
-            <p className="text-sm font-bold text-slate-500">{roleLabels} · {profile.factoryName}</p>
+            <p className="text-xl font-normal text-refDark">{profile.fullName}</p>
+            <p className="text-sm font-normal text-slate-500">{roleLabels} · {profile.factoryName}</p>
           </div>
         </div>
 
@@ -53,16 +53,16 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50" onClick={() => notify("Смена пароля будет доступна в следующей итерации.", "warning")} type="button">
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-700 transition hover:bg-slate-50" onClick={() => notify("Смена пароля будет доступна в следующей итерации.", "warning")} type="button">
             <KeyRound size={17} />
             Сменить пароль
           </button>
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-black text-white transition hover:bg-red-700" onClick={onLogout} type="button">
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-normal text-white transition hover:bg-red-700" onClick={onLogout} type="button">
             <LogOut size={17} />
             Выйти из аккаунта
           </button>
         </div>
-        <p className="mt-3 text-xs font-semibold text-slate-500">Смена пароля подготовлена в интерфейсе. Backend endpoint для этого действия будет подключен отдельно.</p>
+        <p className="mt-3 text-xs font-normal text-slate-500">Смена пароля подготовлена в интерфейсе. Backend endpoint для этого действия будет подключен отдельно.</p>
       </section>
     </div>
   );
@@ -71,8 +71,8 @@ export function UserProfile({ profile, loading, error, onLogout }: { profile: Cu
 function ProfileRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <p className="text-xs font-black text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-sm font-black text-refDark">{value}</p>
+      <p className="text-xs font-normal text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-normal text-refDark">{value}</p>
     </div>
   );
 }

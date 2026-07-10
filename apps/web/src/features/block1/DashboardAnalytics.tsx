@@ -90,8 +90,8 @@ export function DashboardAnalytics({ profile, factoryId }: DashboardAnalyticsPro
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-refDark md:text-3xl">Дашборд Блока 1</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">Ежедневный контроль выполнения заявки по факту выхода персонала</p>
+          <h1 className="text-2xl font-normal tracking-tight text-refDark md:text-3xl">Дашборд Блока 1</h1>
+          <p className="mt-1 text-sm font-normal text-slate-500">Ежедневный контроль выполнения заявки по факту выхода персонала</p>
         </div>
         <button className="btn-primary h-10 gap-2 self-start" onClick={report}>
           <Download size={17} />
@@ -99,37 +99,37 @@ export function DashboardAnalytics({ profile, factoryId }: DashboardAnalyticsPro
         </button>
       </div>
 
-      {notice && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800">{notice}</div>}
+      {notice && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-normal text-amber-800">{notice}</div>}
 
       <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="grid gap-2 md:grid-cols-[220px_1fr_1fr_auto]">
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Период</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Период</span>
             <div className="relative">
               <input className="field h-10 pr-10" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
               <CalendarDays className="pointer-events-none absolute right-3 top-2.5 text-slate-400" size={17} />
             </div>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Цех</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Цех</span>
             <select className="field h-10" value={workshopId} onChange={(event) => { setWorkshopId(event.target.value); setSectionId(""); }}>
               <option value="">Все цеха</option>
               {workshops.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Участок</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Участок</span>
             <select className="field h-10" value={sectionId} onChange={(event) => setSectionId(event.target.value)}>
               <option value="">Все участки</option>
               {sections.map((row) => <option key={row.sectionId} value={row.sectionId}>{row.sectionName}</option>)}
             </select>
           </label>
-          <button className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50" onClick={load}>
+          <button className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-700 transition hover:bg-slate-50" onClick={load}>
             <RefreshCcw size={16} />
             Обновить
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-500">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-normal text-slate-500">
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-refGreen">Фабрика: {profile?.factory?.name || profile?.factoryName || "выбрана"}</span>
         </div>
       </section>
@@ -168,10 +168,10 @@ function AnalyticsContent({ analytics, loading }: { analytics: RequestFactAnalyt
       <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-black text-refDark">Заявка / факт</h2>
-            <p className="text-xs font-semibold text-slate-500">Сводка по оперативной заявке, факту выхода и причинам отклонений</p>
+            <h2 className="text-lg font-normal text-refDark">Заявка / факт</h2>
+            <p className="text-xs font-normal text-slate-500">Сводка по оперативной заявке, факту выхода и причинам отклонений</p>
           </div>
-          {analytics.gaps.length ? <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">MVP: {analytics.gaps.length} gap</span> : null}
+          {analytics.gaps.length ? <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-normal text-slate-500">MVP: {analytics.gaps.length} gap</span> : null}
         </div>
         {rows.length ? <AnalyticsTable rows={rows} /> : (
           <Empty title="Пустые данные" text="Нет заявок и факта для выбранного периода, цеха или участка." />
@@ -196,9 +196,9 @@ function KpiCard({ title, value, caption, tone }: { title: string; value: string
   }[tone];
   return (
     <div className={`rounded-lg border border-slate-200 p-3 shadow-sm ${toneClass}`}>
-      <p className="text-xs font-black text-slate-500">{title}</p>
-      <p className={`mt-2 text-2xl font-black ${valueClass}`}>{value}</p>
-      <p className="mt-1 text-[11px] font-bold text-slate-500">{caption}</p>
+      <p className="text-xs font-normal text-slate-500">{title}</p>
+      <p className={`mt-2 text-2xl font-normal ${valueClass}`}>{value}</p>
+      <p className="mt-1 text-[11px] font-normal text-slate-500">{caption}</p>
     </div>
   );
 }
@@ -219,7 +219,7 @@ function AnalyticsTable({ rows }: { rows: RequestFactAnalyticsRow[] }) {
           <col className="w-[7%]" />
           <col className="w-[19%]" />
         </colgroup>
-        <thead className="bg-slate-50 text-xs font-black text-slate-500">
+        <thead className="bg-slate-50 text-xs font-normal text-slate-500">
           <tr>
             <Th>Участок / цех</Th>
             <Th>Заявка на месяц</Th>
@@ -251,16 +251,16 @@ function AnalyticsTable({ rows }: { rows: RequestFactAnalyticsRow[] }) {
               <tr key={row.sectionId} className={rowClass}>
                 <Td strong={isGroup || isTotal} className={isTotal ? "border-white/20" : ""}>
                   <span className={isGroup || isTotal ? "block uppercase" : "block pl-4"}>{rowLabel(row)}</span>
-                  {row.rowType === "section" ? <span className="mt-0.5 block pl-4 text-xs font-bold text-slate-500">{row.parentName}</span> : null}
+                  {row.rowType === "section" ? <span className="mt-0.5 block pl-4 text-xs font-normal text-slate-500">{row.parentName}</span> : null}
                 </Td>
                 <Td numeric className={isTotal ? "border-white/20" : ""}>{formatNumber(row.demandMonth)}</Td>
                 <Td numeric className={isTotal ? "border-white/20" : ""}>{formatNumber(row.demandWeek)}</Td>
                 <Td numeric className={isTotal ? "border-white/20" : ""}>{formatNumber(row.demandDay)}</Td>
-                <Td numeric className={isTotal ? "border-white/20 font-black" : "font-black"}>{formatNumber(row.factTotal)}</Td>
-                <Td numeric className={`${isTotal ? "border-white/20 text-white" : deviationClass(row.deviationDay)} font-black`}>{formatNumber(row.deviationDay)}</Td>
-                <Td numeric className={`${problem && !isTotal ? "text-red-700" : ""} ${isTotal ? "border-white/20" : ""} font-black`}>{formatPercent(row.completionPercentDay)}</Td>
-                <Td numeric className={isTotal ? "border-white/20 font-black" : "font-semibold"}>{formatPercent(row.completionPercentWeek)}</Td>
-                <Td numeric className={isTotal ? "border-white/20 font-black" : "font-semibold"}>{formatPercent(row.completionPercentMonth)}</Td>
+                <Td numeric className={isTotal ? "border-white/20 font-normal" : "font-normal"}>{formatNumber(row.factTotal)}</Td>
+                <Td numeric className={`${isTotal ? "border-white/20 text-white" : deviationClass(row.deviationDay)} font-normal`}>{formatNumber(row.deviationDay)}</Td>
+                <Td numeric className={`${problem && !isTotal ? "text-red-700" : ""} ${isTotal ? "border-white/20" : ""} font-normal`}>{formatPercent(row.completionPercentDay)}</Td>
+                <Td numeric className={isTotal ? "border-white/20 font-normal" : "font-normal"}>{formatPercent(row.completionPercentWeek)}</Td>
+                <Td numeric className={isTotal ? "border-white/20 font-normal" : "font-normal"}>{formatPercent(row.completionPercentMonth)}</Td>
                 <Td className={isTotal ? "border-white/20" : ""}>{row.deviationReason || (problem && row.rowType === "section" ? "Требуется пояснение" : "—")}</Td>
               </tr>
             );
@@ -276,7 +276,7 @@ function Th({ children }: { children: string }) {
 }
 
 function Td({ children, strong, numeric, className = "" }: { children: ReactNode; strong?: boolean; numeric?: boolean; className?: string }) {
-  return <td className={`break-words border-b border-r border-slate-200 px-2 py-3 align-top last:border-r-0 ${numeric ? "text-right tabular-nums" : ""} ${strong ? "font-black" : "font-semibold"} ${className}`}>{children}</td>;
+  return <td className={`break-words border-b border-r border-slate-200 px-2 py-3 align-top last:border-r-0 ${numeric ? "text-right tabular-nums" : ""} ${strong ? "font-normal" : "font-normal"} ${className}`}>{children}</td>;
 }
 
 function DashboardSkeleton() {

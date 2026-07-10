@@ -53,7 +53,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
         <div className="grid min-w-0 gap-2 xl:grid-cols-[minmax(11rem,1fr)_minmax(14rem,1.4fr)_6.5rem_6.5rem_6.5rem_7rem_2.5rem] xl:items-end">
           <PlanRowField label="Структура">
             {canEditFactory ? (
-              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-black text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("section")}>
+              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-normal text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("section")}>
                 {row.section_id ? displaySectionName(row.section_name) : "Выбрать"}
               </button>
             ) : (
@@ -62,7 +62,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </PlanRowField>
           <PlanRowField label="Операция">
             {canEditFactory ? (
-              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-black text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("operation")}>
+              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-normal text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("operation")}>
                 {row.name ? displayOperationName(row.name) : "Выбрать"}
               </button>
             ) : (
@@ -71,14 +71,14 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </PlanRowField>
           <PlanRowField label="Персонал">
             {canEditFactory ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
             ) : (
               <ReadonlyCell align="center">{required}</ReadonlyCell>
             )}
           </PlanRowField>
           <PlanRowField label="Штат">
             {canEditHr ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
             ) : (
               <ReadonlyCell align="center">{staff}</ReadonlyCell>
             )}
@@ -88,7 +88,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </PlanRowField>
           <PlanRowField label="Ставка">
             {canEditOut ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} />
             ) : (
               <ReadonlyCell align="center">{row.rate_per_hour}</ReadonlyCell>
             )}
@@ -146,10 +146,10 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
         {canEditFactory ? (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
             <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
-              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("section")}>
+              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-[11px] font-normal text-slate-700 outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("section")}>
                 {row.section_id ? displaySectionName(row.section_name) : "Участок"}
               </button>
-              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("operation")}>
+              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("operation")}>
                 {row.name ? displayOperationName(row.name) : "Операция"}
               </button>
             </div>
@@ -161,8 +161,8 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-600">{displaySectionName(row.section_name)}</span>
-            <p className="min-w-0 truncate text-sm font-black">{displayOperationName(row.name)}</p>
+            <span className="shrink-0 rounded bg-slate-100 px-2 py-1 text-[11px] font-normal text-slate-600">{displaySectionName(row.section_name)}</span>
+            <p className="min-w-0 truncate text-sm font-normal">{displayOperationName(row.name)}</p>
           </div>
         )}
       </div>
@@ -170,23 +170,23 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-slate-300 bg-white text-center text-xs sm:text-sm">
         <PlanMetric label="Персонал" value={required}>
           {canEditFactory ? (
-            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
+            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Штат" value={staff}>
           {canEditHr ? (
-            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
+            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Аутсорсинг" value={outsource} accent />
       </div>
 
       {(kind === "out" || canEditOut || assigned.length > 0) && (
-        <div className="mt-2 rounded-md bg-slate-50 p-2 text-xs font-bold text-slate-600">
+        <div className="mt-2 rounded-md bg-slate-50 p-2 text-xs font-normal text-slate-600">
           {(kind === "out" || canEditOut) && (
             <div className="grid gap-2">
               {canEditOut ? (
-                <label className="text-[11px] font-black text-slate-500">Ставка/час<input className="field mt-1 h-8" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} /></label>
+                <label className="text-[11px] font-normal text-slate-500">Ставка/час<input className="field mt-1 h-8" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} /></label>
               ) : (
                 <p>{row.rate_per_hour} руб./ч</p>
               )}
@@ -194,7 +194,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           )}
           {(kind === "out" || canEditOut) && !edit && <p className="mt-2 text-refGreen">Назначено: {assigned.length}/{Math.max(outsource, assigned.length, 1)}</p>}
           {assignedText && <p className="mt-2 text-refGreen">{assignedText}</p>}
-          {canOpen && <p className="mt-2 text-right text-[11px] font-black text-refGreen">Открыть распределение</p>}
+          {canOpen && <p className="mt-2 text-right text-[11px] font-normal text-refGreen">Открыть распределение</p>}
         </div>
       )}
       {picker === "section" && (
@@ -249,12 +249,12 @@ export function CatalogPicker({ title, emptyText, entries, selectedId, selectabl
               type="button"
               onClick={() => onSelect(entry)}
             >
-              <span className="min-w-0 truncate font-black" style={{ paddingLeft: `${entry.depth * 18}px` }}>{entry.name}</span>
-              {entry.childCount > 0 && <span className="shrink-0 text-[11px] font-bold text-slate-400">+{entry.childCount}</span>}
+              <span className="min-w-0 truncate font-normal" style={{ paddingLeft: `${entry.depth * 18}px` }}>{entry.name}</span>
+              {entry.childCount > 0 && <span className="shrink-0 text-[11px] font-normal text-slate-400">+{entry.childCount}</span>}
             </button>
           );
         })}
-        {!visibleEntries.length && <p className="p-4 text-sm font-bold text-slate-500">{emptyText}</p>}
+        {!visibleEntries.length && <p className="p-4 text-sm font-normal text-slate-500">{emptyText}</p>}
       </div>
     </Modal>
   );
@@ -262,7 +262,7 @@ export function CatalogPicker({ title, emptyText, entries, selectedId, selectabl
 
 function PlanRowField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="min-w-0 text-[11px] font-black uppercase text-slate-500">
+    <label className="min-w-0 text-[11px] font-normal uppercase text-slate-500">
       {label}
       <div className="mt-1">{children}</div>
     </label>
@@ -271,7 +271,7 @@ function PlanRowField({ label, children }: { label: string; children: ReactNode 
 
 function ReadonlyCell({ children, align = "left", accent }: { children: ReactNode; align?: "left" | "center"; accent?: boolean }) {
   return (
-    <div className={`flex h-9 min-w-0 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-black ${align === "center" ? "justify-center text-center" : ""} ${accent ? "text-refGreen" : "text-refDark"}`}>
+    <div className={`flex h-9 min-w-0 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-normal ${align === "center" ? "justify-center text-center" : ""} ${accent ? "text-refGreen" : "text-refDark"}`}>
       <span className="min-w-0 truncate">{children}</span>
     </div>
   );
@@ -338,8 +338,8 @@ function buildTreeEntries(nodes: Array<Omit<PickerEntry, "depth">>): PickerEntry
 function PlanMetric({ label, value, accent, children }: { label: string; value: unknown; accent?: boolean; children?: ReactNode }) {
   return (
     <div className="border-r border-slate-300 px-2 py-1.5 last:border-r-0">
-      <p className="text-[11px] font-bold text-slate-600">{label}</p>
-      {children || <p className={`mt-0.5 text-sm font-black ${accent ? "text-refGreen" : ""}`}>{String(value ?? "")}</p>}
+      <p className="text-[11px] font-normal text-slate-600">{label}</p>
+      {children || <p className={`mt-0.5 text-sm font-normal ${accent ? "text-refGreen" : ""}`}>{String(value ?? "")}</p>}
     </div>
   );
 }

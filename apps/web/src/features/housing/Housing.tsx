@@ -45,8 +45,8 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-black">Шахматка проживания</p>
-            <p className="text-xs font-bold text-slate-500">{dorm ? dorm.name : "Общежитие не выбрано"}</p>
+            <p className="text-sm font-normal">Шахматка проживания</p>
+            <p className="text-xs font-normal text-slate-500">{dorm ? dorm.name : "Общежитие не выбрано"}</p>
           </div>
           {places[0] && (
             <button className="btn-primary h-10 gap-2 bg-orange-500 px-3 hover:bg-orange-600" onClick={() => setReservationEditor({ place: places[0], day: period.start })}>
@@ -55,12 +55,12 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
           )}
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-[1fr_1fr_1fr_auto_auto_auto]">
-          <label className="text-xs font-black text-slate-500">Заезд<input className="field mt-1 h-10" value={period.start} onChange={(e) => setPeriod({ ...period, start: e.target.value })} placeholder="01.04.2026" /></label>
-          <label className="text-xs font-black text-slate-500">Выезд<input className="field mt-1 h-10" value={period.end} onChange={(e) => setPeriod({ ...period, end: e.target.value })} placeholder="30.04.2026" /></label>
-          <label className="text-xs font-black text-slate-500">Ставка, руб./день<input className="field mt-1 h-10" min={0} type="number" value={defaultCostDraft} onChange={(e) => setDefaultCostDraft(Math.max(0, numberValue(e.target.value, 0)))} /></label>
-          <button className="h-10 self-end rounded-md bg-slate-700 px-3 text-sm font-black text-white hover:bg-slate-800" onClick={saveDefaultCost}><Save size={16} className="inline" /> Сохранить ставку</button>
-          {dorm && <button className="h-10 self-end rounded-md bg-slate-800 px-3 text-sm font-black text-white hover:bg-slate-900" onClick={() => setEditor(true)}><Pencil size={16} className="inline" /> Изменить</button>}
-          <button className="h-10 self-end rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800" onClick={() => mutate("/housing-dorms", "POST", { name: `Общежитие № ${data.housingDorms.length + 1}`, room_count: 5, beds_per_room: 5 }, "Общежитие создано")}>
+          <label className="text-xs font-normal text-slate-500">Заезд<input className="field mt-1 h-10" value={period.start} onChange={(e) => setPeriod({ ...period, start: e.target.value })} placeholder="01.04.2026" /></label>
+          <label className="text-xs font-normal text-slate-500">Выезд<input className="field mt-1 h-10" value={period.end} onChange={(e) => setPeriod({ ...period, end: e.target.value })} placeholder="30.04.2026" /></label>
+          <label className="text-xs font-normal text-slate-500">Ставка, руб./день<input className="field mt-1 h-10" min={0} type="number" value={defaultCostDraft} onChange={(e) => setDefaultCostDraft(Math.max(0, numberValue(e.target.value, 0)))} /></label>
+          <button className="h-10 self-end rounded-md bg-slate-700 px-3 text-sm font-normal text-white hover:bg-slate-800" onClick={saveDefaultCost}><Save size={16} className="inline" /> Сохранить ставку</button>
+          {dorm && <button className="h-10 self-end rounded-md bg-slate-800 px-3 text-sm font-normal text-white hover:bg-slate-900" onClick={() => setEditor(true)}><Pencil size={16} className="inline" /> Изменить</button>}
+          <button className="h-10 self-end rounded-md bg-refGreen px-3 text-sm font-normal text-white hover:bg-emerald-800" onClick={() => mutate("/housing-dorms", "POST", { name: `Общежитие № ${data.housingDorms.length + 1}`, room_count: 5, beds_per_room: 5 }, "Общежитие создано")}>
             <Plus size={16} className="inline" /> Общежитие
           </button>
         </div>
@@ -68,8 +68,8 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-black">Общежития</p>
-          <p className="text-xs font-bold text-slate-500">{data.housingDorms.length} объектов</p>
+          <p className="text-sm font-normal">Общежития</p>
+          <p className="text-xs font-normal text-slate-500">{data.housingDorms.length} объектов</p>
         </div>
       <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
         {data.housingDorms.map((item) => {
@@ -83,9 +83,9 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
               className={`min-w-[190px] rounded-md border p-3 text-left shadow-sm transition ${selected ? "border-refGreen bg-refGreen text-white" : "border-slate-200 bg-slate-50 text-refDark hover:bg-slate-100"}`}
               onClick={() => setDormId(String(item.id))}
             >
-              <p className="truncate text-sm font-black">{item.name}</p>
-              <p className={`mt-1 text-xs font-bold ${selected ? "text-white/80" : "text-slate-500"}`}>{rooms.length} комн. · {beds} койко-мест</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-black">
+              <p className="truncate text-sm font-normal">{item.name}</p>
+              <p className={`mt-1 text-xs font-normal ${selected ? "text-white/80" : "text-slate-500"}`}>{rooms.length} комн. · {beds} койко-мест</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-normal">
                 <span className={`rounded px-2 py-1 text-center ${selected ? "bg-white/15" : "bg-white"}`}>Своб. {Math.max(beds - occupied, 0)}</span>
                 <span className={`rounded px-2 py-1 text-center ${selected ? "bg-white/15" : "bg-white"}`}>Зан. {occupied}</span>
               </div>
@@ -95,7 +95,7 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
       </div>
       </div>
 
-      <div className="grid grid-cols-3 overflow-hidden rounded-md bg-refGreen text-center text-[10px] font-black leading-tight text-white shadow-panel sm:text-xs">
+      <div className="grid grid-cols-3 overflow-hidden rounded-md bg-refGreen text-center text-[10px] font-normal leading-tight text-white shadow-panel sm:text-xs">
         <div className="border-r border-white/25 p-2 sm:p-3"><p className="opacity-80">Персонал к заселению</p><p className="mt-1 text-base sm:text-lg">{data.summary.personnelToSettle}</p></div>
         <div className="border-r border-white/25 p-2 sm:p-3"><p className="opacity-80">Свободных койко-мест</p><p className="mt-1 text-base sm:text-lg">{Math.max(dormBeds - occupiedInDorm, 0)}</p></div>
         <div className="p-2 sm:p-3"><p className="opacity-80">Занятых койко-мест</p><p className="mt-1 text-base sm:text-lg">{occupiedInDorm}</p></div>
@@ -103,7 +103,7 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
 
       {!dorm ? (
         <div className="rounded-md border border-dashed border-slate-300 p-6 text-center">
-          <p className="mb-3 text-sm font-black text-slate-500">Общежитий пока нет</p>
+          <p className="mb-3 text-sm font-normal text-slate-500">Общежитий пока нет</p>
           <button className="btn-primary" onClick={() => mutate("/housing-dorms", "POST", { name: "Общежитие № 1", room_count: 5, beds_per_room: 5 }, "Общежитие создано")}>
             <Plus size={16} /> Добавить общежитие
           </button>
@@ -120,7 +120,7 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
                   <button
                     type="button"
                     data-housing-block-toggle={block.block}
-                    className="flex h-12 w-full items-center justify-between gap-3 bg-slate-100 px-3 text-left text-xs font-black text-refDark transition hover:bg-slate-200 focus:bg-slate-200 focus:outline-none"
+                    className="flex h-12 w-full items-center justify-between gap-3 bg-slate-100 px-3 text-left text-xs font-normal text-refDark transition hover:bg-slate-200 focus:bg-slate-200 focus:outline-none"
                     aria-expanded={!collapsed}
                     aria-controls={blockBodyId}
                     onClick={() => toggleBlock(blockKey)}
@@ -148,14 +148,14 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
                             <th className="border border-slate-300 bg-slate-100 p-1 md:p-2" colSpan={days.length}>{dorm.name}</th>
                           </tr>
                           <tr>
-                            {days.map((day) => <th key={`${block.key}-${day}`} className="w-6 border border-slate-300 bg-slate-100 p-1 font-black md:w-8">{day.slice(0, 2)}</th>)}
+                            {days.map((day) => <th key={`${block.key}-${day}`} className="w-6 border border-slate-300 bg-slate-100 p-1 font-normal md:w-8">{day.slice(0, 2)}</th>)}
                           </tr>
                         </thead>
                         <tbody>
                           {block.rooms.map((group) => group.rows.map((place, index) => (
                             <tr key={place.label} data-housing-place-row={place.label} data-room-id={place.room_id || ""} data-bed-number={place.bed_number || ""} className="align-top">
-                              <td className="truncate whitespace-nowrap align-top border border-slate-300 bg-slate-50 p-1 text-center font-black leading-tight md:p-2">{index === 0 ? group.room : ""}</td>
-                              <td data-housing-bed-label={place.label} className="truncate whitespace-nowrap align-top border border-slate-300 bg-white p-1 font-bold leading-tight md:p-2">{place.bed}</td>
+                              <td className="truncate whitespace-nowrap align-top border border-slate-300 bg-slate-50 p-1 text-center font-normal leading-tight md:p-2">{index === 0 ? group.room : ""}</td>
+                              <td data-housing-bed-label={place.label} className="truncate whitespace-nowrap align-top border border-slate-300 bg-white p-1 font-normal leading-tight md:p-2">{place.bed}</td>
                               {days.map((day) => <HousingCell key={`${place.label}-${day}`} place={place} day={day} reservations={data.reservations} onOpen={(reservation) => setReservationEditor({ place, day, reservation })} />)}
                             </tr>
                           )))}
@@ -170,7 +170,7 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-500">
+      <div className="flex flex-wrap gap-2 text-xs font-normal text-slate-500">
         <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded-sm bg-emerald-200" />Заехал</span>
         <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded-sm bg-yellow-200" />Не заехал</span>
         <span className="inline-flex items-center gap-1"><span className="h-3 w-5 rounded-sm bg-blue-200" />В резерве</span>
@@ -178,7 +178,7 @@ export function Housing({ data, mutate, loadMore }: { data: BootstrapData; mutat
       {editor && dorm && <DormModal dorm={dorm} reservations={data.reservations} mutate={mutate} close={() => setEditor(false)} />}
       {reservationEditor && <ReservationModal context={reservationEditor} data={data} mutate={mutate} close={() => setReservationEditor(null)} />}
       {data.pagination?.reservations.nextCursor && (
-        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-black text-refGreen hover:bg-emerald-50" onClick={() => loadMore("reservations")}>
+        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-normal text-refGreen hover:bg-emerald-50" onClick={() => loadMore("reservations")}>
           Загрузить еще брони
         </button>
       )}
@@ -301,7 +301,7 @@ function HousingCell({ place, day, reservations, onOpen }: { place: HousingPlace
       {reservation ? (
         <button
           data-housing-reservation={reservation.id}
-          className={`box-border h-full w-full truncate whitespace-nowrap px-1 text-left text-[9px] font-black leading-tight ${reservationTone} ${isStart ? "rounded-l-sm" : ""} ${isEnd ? "rounded-r-sm" : ""}`}
+          className={`box-border h-full w-full truncate whitespace-nowrap px-1 text-left text-[9px] font-normal leading-tight ${reservationTone} ${isStart ? "rounded-l-sm" : ""} ${isEnd ? "rounded-r-sm" : ""}`}
           title={`${displayReservationEmployeeName(reservation)}: ${reservation.check_in} - ${reservation.check_out}`}
           onClick={() => onOpen(reservation)}
         >
@@ -385,13 +385,13 @@ function ReservationModal({ context, data, mutate, close }: { context: { place: 
           <Input label="Заезд" value={draft.check_in} onChange={(value) => setDraft({ ...draft, check_in: value })} />
           <Input label="Выезд" value={draft.check_out} onChange={(value) => setDraft({ ...draft, check_out: value })} />
         </div>
-        <label className="text-sm font-black">
+        <label className="text-sm font-normal">
           Сотрудник
           <select className="field mt-1" value={draft.employee_id} onChange={(event) => setDraft({ ...draft, employee_id: event.target.value })}>
             {housingEmployees.map((employee) => <option key={employee.id} value={employee.id}>{displayEmployeeName(employee)}</option>)}
           </select>
         </label>
-        {!housingEmployees.length && <p className="rounded-md bg-orange-50 p-2 text-sm font-bold text-orange-700">В базе нет сотрудников с отметкой "Нуждается в жилье".</p>}
+        {!housingEmployees.length && <p className="rounded-md bg-orange-50 p-2 text-sm font-normal text-orange-700">В базе нет сотрудников с отметкой "Нуждается в жилье".</p>}
         <div className="grid gap-2 md:grid-cols-2">
           <Readonly label="Телефон" value={selectedEmployee?.phone || "-"} />
           <Input
@@ -405,7 +405,7 @@ function ReservationModal({ context, data, mutate, close }: { context: { place: 
             }}
           />
         </div>
-        <label className="text-sm font-black">
+        <label className="text-sm font-normal">
           Статус
           <select className="field mt-1" value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
             <option>Не заехал</option>
@@ -415,9 +415,9 @@ function ReservationModal({ context, data, mutate, close }: { context: { place: 
         </label>
         <Input label="Комментарий" value={draft.comment} onChange={(value) => setDraft({ ...draft, comment: value })} />
         <div className="flex justify-between gap-2">
-          {context.reservation ? <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-black text-white" onClick={() => mutate(`/reservations/${context.reservation?.id}`, "DELETE", undefined, "Бронь удалена").then(close)}>Удалить</button> : <span />}
+          {context.reservation ? <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-normal text-white" onClick={() => mutate(`/reservations/${context.reservation?.id}`, "DELETE", undefined, "Бронь удалена").then(close)}>Удалить</button> : <span />}
           <div className="flex gap-2">
-            <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-black" onClick={close}>Закрыть</button>
+            <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-normal" onClick={close}>Закрыть</button>
             <button className="btn-primary" onClick={save}>{context.reservation ? "Сохранить" : "Создать"}</button>
           </div>
         </div>
@@ -570,8 +570,8 @@ function DormModal({ dorm, reservations, mutate, close }: { dorm: Dormitory; res
         <Input label="Название" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} />
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-black">Комнаты</p>
-            <button className="rounded-md bg-slate-100 px-3 py-2 text-xs font-black text-refGreen hover:bg-emerald-50" onClick={addRoom}>
+            <p className="text-sm font-normal">Комнаты</p>
+            <button className="rounded-md bg-slate-100 px-3 py-2 text-xs font-normal text-refGreen hover:bg-emerald-50" onClick={addRoom}>
               <Plus size={14} className="inline" /> Добавить
             </button>
           </div>
@@ -585,15 +585,15 @@ function DormModal({ dorm, reservations, mutate, close }: { dorm: Dormitory; res
               return (
                 <div key={`${room.id || "new"}-${index}`} className="rounded-md border border-slate-200 bg-slate-50 p-2">
                   <div className="grid gap-2 md:grid-cols-[1fr_1fr_120px_40px]">
-                    <label className="text-xs font-black text-slate-500">
+                    <label className="text-xs font-normal text-slate-500">
                       Номер
                       <input className="field mt-1 h-10" value={room.number} onChange={(event) => updateRoom(index, { number: event.target.value })} />
                     </label>
-                    <label className="text-xs font-black text-slate-500">
+                    <label className="text-xs font-normal text-slate-500">
                       Блок
                       <input className="field mt-1 h-10" value={room.block} onChange={(event) => updateRoom(index, { block: event.target.value })} />
                     </label>
-                    <label className="text-xs font-black text-slate-500">
+                    <label className="text-xs font-normal text-slate-500">
                       Койко-мест
                       <input
                         className="field mt-1 h-10"
@@ -612,7 +612,7 @@ function DormModal({ dorm, reservations, mutate, close }: { dorm: Dormitory; res
                       <Trash2 size={16} className="mx-auto" />
                     </button>
                   </div>
-                  {occupiedBed > 0 && <p className="mt-2 text-xs font-bold text-orange-600">Занято до койко-места № {occupiedBed}</p>}
+                  {occupiedBed > 0 && <p className="mt-2 text-xs font-normal text-orange-600">Занято до койко-места № {occupiedBed}</p>}
                 </div>
               );
             })}

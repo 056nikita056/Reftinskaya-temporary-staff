@@ -43,8 +43,8 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-refDark md:text-3xl">Администрирование пользователей и ролей</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">Контроль доступа по ролям и обязательной привязке к фабрике</p>
+          <h1 className="text-2xl font-normal tracking-tight text-refDark md:text-3xl">Администрирование пользователей и ролей</h1>
+          <p className="mt-1 text-sm font-normal text-slate-500">Контроль доступа по ролям и обязательной привязке к фабрике</p>
         </div>
         <button className="btn-primary h-10 gap-2 self-start" onClick={() => showNextIteration("Создание пользователя")} type="button">
           <Plus size={17} />
@@ -54,10 +54,10 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
 
       <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-refGreen bg-emerald-50 px-4 py-2 text-sm font-black text-refGreen">Фабрика: {profile?.factoryName || "Рефтинская"}</span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-black text-slate-600">Роль: все</span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-black text-slate-600">Статус: активные</span>
-          <button className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50" onClick={() => showNextIteration("Экспорт пользователей")} type="button">
+          <span className="rounded-full border border-refGreen bg-emerald-50 px-4 py-2 text-sm font-normal text-refGreen">Фабрика: {profile?.factoryName || "Рефтинская"}</span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-normal text-slate-600">Роль: все</span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-normal text-slate-600">Статус: активные</span>
+          <button className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-700 transition hover:bg-slate-50" onClick={() => showNextIteration("Экспорт пользователей")} type="button">
             <Download size={16} />
             Экспорт
           </button>
@@ -65,20 +65,20 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-black text-refDark">Действия администратора</h2>
+        <h2 className="text-lg font-normal text-refDark">Действия администратора</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <ActionChip tone="green">создать пользователя</ActionChip>
           <ActionChip>изменить роль</ActionChip>
           <ActionChip>привязать к фабрике</ActionChip>
           <ActionChip tone="yellow">заблокировать / активировать</ActionChip>
-          <p className="ml-auto max-w-xs text-xs font-semibold leading-5 text-slate-500">Все действия сохраняют журнал последнего входа или изменения.</p>
+          <p className="ml-auto max-w-xs text-xs font-normal leading-5 text-slate-500">Все действия сохраняют журнал последнего входа или изменения.</p>
         </div>
       </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-lg font-black text-refDark">Пользователи</h2>
-          <button className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-50" onClick={load}>
+          <h2 className="text-lg font-normal text-refDark">Пользователи</h2>
+          <button className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-normal text-slate-700 hover:bg-slate-50" onClick={load}>
             <RefreshCcw size={15} />
             Обновить
           </button>
@@ -90,7 +90,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
         ) : users.length ? (
           <div className="overflow-x-auto rounded-md border border-slate-200">
             <table className="min-w-[920px] w-full border-collapse text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-black text-slate-500">
+              <thead className="bg-slate-50 text-xs font-normal text-slate-500">
                 <tr>
                   <Th>ФИО</Th>
                   <Th>Логин</Th>
@@ -107,7 +107,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
                     <Td>{user.email || user.login}</Td>
                     <Td>{user.role}</Td>
                     <Td>{user.factoryName || "Фабрика не указана"}</Td>
-                    <Td className={user.status === "inactive" ? "font-black text-red-700" : "font-black text-refGreen"}>{user.status === "inactive" ? "заблокирован" : "активен"}</Td>
+                    <Td className={user.status === "inactive" ? "font-normal text-red-700" : "font-normal text-refGreen"}>{user.status === "inactive" ? "заблокирован" : "активен"}</Td>
                     <Td className={user.status === "inactive" ? "text-red-700" : ""}>{formatActivity(user.lastActivityAt)}</Td>
                   </tr>
                 ))}
@@ -121,7 +121,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
 
       <section className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center">
         <div className="min-w-0 flex-1">
-          <h2 className="font-black text-refDark">Быстрое редактирование выбранного пользователя</h2>
+          <h2 className="font-normal text-refDark">Быстрое редактирование выбранного пользователя</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <ActionChip>Роль: hr</ActionChip>
             <ActionChip tone="green">Фабрика: {profile?.factoryName || "Рефтинская"}</ActionChip>
@@ -129,7 +129,7 @@ export function AdminUsers({ profile }: { profile: CurrentUserProfile | null }) 
           </div>
         </div>
         <button className="btn-primary h-10 gap-2" onClick={() => showNextIteration("Быстрое редактирование")} type="button"><Save size={16} />Сохранить</button>
-        <button className="h-10 rounded-md bg-red-600 px-4 text-sm font-black text-white transition hover:bg-red-700" onClick={() => showNextIteration("Блокировка пользователя")} type="button">Заблокировать</button>
+        <button className="h-10 rounded-md bg-red-600 px-4 text-sm font-normal text-white transition hover:bg-red-700" onClick={() => showNextIteration("Блокировка пользователя")} type="button">Заблокировать</button>
       </section>
     </div>
   );
@@ -141,7 +141,7 @@ function ActionChip({ children, tone = "default" }: { children: ReactNode; tone?
     green: "border-refGreen bg-emerald-50 text-refGreen",
     yellow: "border-amber-200 bg-amber-50 text-amber-700"
   }[tone];
-  return <span className={`rounded-full border px-4 py-2 text-xs font-black ${className}`}>{children}</span>;
+  return <span className={`rounded-full border px-4 py-2 text-xs font-normal ${className}`}>{children}</span>;
 }
 
 function Th({ children }: { children: string }) {
@@ -149,5 +149,5 @@ function Th({ children }: { children: string }) {
 }
 
 function Td({ children, strong, className = "" }: { children: ReactNode; strong?: boolean; className?: string }) {
-  return <td className={`border-b border-r border-slate-200 px-3 py-4 align-top last:border-r-0 ${strong ? "font-black" : "font-semibold"} ${className}`}>{children}</td>;
+  return <td className={`border-b border-r border-slate-200 px-3 py-4 align-top last:border-r-0 ${strong ? "font-normal" : "font-normal"} ${className}`}>{children}</td>;
 }

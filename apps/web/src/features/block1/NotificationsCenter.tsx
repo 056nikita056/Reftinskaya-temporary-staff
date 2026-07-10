@@ -80,10 +80,10 @@ export function NotificationsCenter({ onNavigate }: { onNavigate: (module: Modul
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-refDark md:text-3xl">Центр уведомлений</h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500">{items.length} уведомлений</p>
+          <h1 className="text-2xl font-normal tracking-tight text-refDark md:text-3xl">Центр уведомлений</h1>
+          <p className="mt-1 text-sm font-normal text-slate-500">{items.length} уведомлений</p>
         </div>
-        <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50" onClick={load}>
+        <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-700 transition hover:bg-slate-50" onClick={load}>
           <RefreshCcw size={16} />
           Обновить
         </button>
@@ -95,7 +95,7 @@ export function NotificationsCenter({ onNavigate }: { onNavigate: (module: Modul
         <FilterButton active={filter === "requestFact"} onClick={() => setFilter("requestFact")}>Заявка / факт</FilterButton>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-normal text-red-700">{error}</div>}
 
       <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         {loading && !items.length ? (
@@ -114,18 +114,18 @@ export function NotificationsCenter({ onNavigate }: { onNavigate: (module: Modul
                   <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-slate-300" : "bg-refGreen"}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-black text-refGreen">{typeLabels[item.type]}</p>
-                      <p className="text-xs font-bold text-slate-500">{formatDate(item.createdAt)}</p>
+                      <p className="text-xs font-normal text-refGreen">{typeLabels[item.type]}</p>
+                      <p className="text-xs font-normal text-slate-500">{formatDate(item.createdAt)}</p>
                     </div>
-                    <p className="mt-2 text-base font-black text-refDark">{item.title}</p>
-                    <p className="mt-1 text-sm font-semibold leading-5 text-slate-600">{item.message}</p>
+                    <p className="mt-2 text-base font-normal text-refDark">{item.title}</p>
+                    <p className="mt-1 text-sm font-normal leading-5 text-slate-600">{item.message}</p>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       {item.targetType || item.targetId ? (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-normal text-slate-600">
                           {item.targetType || "target"} {item.targetId ? `#${item.targetId}` : ""}
                         </span>
                       ) : <span />}
-                      <span className={`inline-flex items-center gap-1 text-xs font-black ${item.isRead ? "text-slate-500" : "text-refGreen"}`}>
+                      <span className={`inline-flex items-center gap-1 text-xs font-normal ${item.isRead ? "text-slate-500" : "text-refGreen"}`}>
                         {item.isRead ? <Check size={14} /> : <Bell size={14} />}
                         {item.isRead ? "прочитано" : "не прочитано"}
                         {(item.targetType || item.targetId) && <ArrowRight size={14} />}
@@ -146,7 +146,7 @@ export function NotificationsCenter({ onNavigate }: { onNavigate: (module: Modul
 
 function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
   return (
-    <button className={`rounded-full border px-4 py-2 text-sm font-black transition ${active ? "border-refGreen bg-emerald-50 text-refGreen" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} onClick={onClick}>
+    <button className={`rounded-full border px-4 py-2 text-sm font-normal transition ${active ? "border-refGreen bg-emerald-50 text-refGreen" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`} onClick={onClick}>
       {children}
     </button>
   );

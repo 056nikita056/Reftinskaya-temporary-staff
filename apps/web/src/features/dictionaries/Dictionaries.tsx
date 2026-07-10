@@ -286,10 +286,10 @@ export function Dictionaries({ data, mutate, canEdit, openPlan }: { data: Bootst
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black">{dictionaryTitle}</h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">{dictionaryStats}</p>
+          <h2 className="text-xl font-normal">{dictionaryTitle}</h2>
+          <p className="mt-1 text-sm font-normal text-slate-500">{dictionaryStats}</p>
         </div>
-        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-200" onClick={() => setActiveDictionary("list")}>
+        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal text-slate-700 hover:bg-slate-200" onClick={() => setActiveDictionary("list")}>
           Назад
         </button>
       </div>
@@ -297,7 +297,7 @@ export function Dictionaries({ data, mutate, canEdit, openPlan }: { data: Bootst
       {canEdit && (
         <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <div className="grid gap-2 xl:grid-cols-[1fr_320px_auto]">
-            <label className="text-sm font-black text-slate-600">
+            <label className="text-sm font-normal text-slate-600">
               Название
               <input
                 className="field mt-1"
@@ -309,7 +309,7 @@ export function Dictionaries({ data, mutate, canEdit, openPlan }: { data: Bootst
                 }}
               />
             </label>
-            <label className="text-sm font-black text-slate-600">
+            <label className="text-sm font-normal text-slate-600">
               Материнский элемент
               <ParentSelect className="field mt-1" value={draft.parent} nodes={dictionaryNodes} onChange={(parent) => setDraft({ ...draft, parent })} />
             </label>
@@ -323,33 +323,33 @@ export function Dictionaries({ data, mutate, canEdit, openPlan }: { data: Bootst
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase text-slate-500">Выбранный элемент</p>
-            <p className="min-w-0 truncate text-sm font-black text-refDark">{selectedCount > 1 ? `Выбрано: ${selectedCount}` : selectedNode ? selectedNode.name : "Не выбран"}</p>
+            <p className="text-xs font-normal uppercase text-slate-500">Выбранный элемент</p>
+            <p className="min-w-0 truncate text-sm font-normal text-refDark">{selectedCount > 1 ? `Выбрано: ${selectedCount}` : selectedNode ? selectedNode.name : "Не выбран"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {canEdit && editKey ? (
               <>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!actionNode || savingKey === actionNode.key} onClick={() => actionNode && saveNode(actionNode)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-normal text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!actionNode || savingKey === actionNode.key} onClick={() => actionNode && saveNode(actionNode)}>
                   <Check size={17} /> Сохранить
                 </button>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200" onClick={cancelEdit}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-normal text-slate-700 hover:bg-slate-200" onClick={cancelEdit}>
                   <X size={17} /> Отмена
                 </button>
               </>
             ) : (
               <>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode || actionNode.operationCount <= 0} onClick={() => actionNode && setUsageNodeKey(actionNode.key)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-normal text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode || actionNode.operationCount <= 0} onClick={() => actionNode && setUsageNodeKey(actionNode.key)}>
                   Использование
                 </button>
                 {canEdit && (
                   <>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && copyNode(actionNode)}>
+                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-normal text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && copyNode(actionNode)}>
                       <Copy size={17} /> Копировать
                     </button>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-refGreen hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && startEdit(actionNode)}>
+                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-normal text-refGreen hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && startEdit(actionNode)}>
                       <Pencil size={17} /> Изменить
                     </button>
-                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && removeNode(actionNode)}>
+                    <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-50 px-3 text-sm font-normal text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && removeNode(actionNode)}>
                       <Trash2 size={17} /> Удалить
                     </button>
                   </>
@@ -416,7 +416,7 @@ function DictionariesLanding({ cards, onOpen }: { cards: Array<{ key: Exclude<Di
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-black">Справочники</h2>
+        <h2 className="text-xl font-normal">Справочники</h2>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => (
@@ -425,21 +425,21 @@ function DictionariesLanding({ cards, onOpen }: { cards: Array<{ key: Exclude<Di
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-refGreen text-white">
                 <FileText size={20} />
               </div>
-              <span className="text-xs font-black uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
+              <span className="text-xs font-normal uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
             </div>
-            <h3 className="mt-4 text-base font-black text-refDark">{card.title}</h3>
+            <h3 className="mt-4 text-base font-normal text-refDark">{card.title}</h3>
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-md bg-slate-50 px-2 py-2">
-                <p className="text-lg font-black text-refDark">{card.total}</p>
-                <p className="text-[10px] font-black uppercase text-slate-500">Всего</p>
+                <p className="text-lg font-normal text-refDark">{card.total}</p>
+                <p className="text-[10px] font-normal uppercase text-slate-500">Всего</p>
               </div>
               <div className="rounded-md bg-slate-50 px-2 py-2">
-                <p className="text-lg font-black text-refDark">{card.active}</p>
-                <p className="text-[10px] font-black uppercase text-slate-500">Активно</p>
+                <p className="text-lg font-normal text-refDark">{card.active}</p>
+                <p className="text-[10px] font-normal uppercase text-slate-500">Активно</p>
               </div>
               <div className="rounded-md bg-slate-50 px-2 py-2">
-                <p className="text-lg font-black text-refDark">{card.used}</p>
-                <p className="text-[10px] font-black uppercase text-slate-500">В планах</p>
+                <p className="text-lg font-normal text-refDark">{card.used}</p>
+                <p className="text-[10px] font-normal uppercase text-slate-500">В планах</p>
               </div>
             </div>
           </button>
@@ -523,11 +523,11 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
       <div className="min-w-0" style={{ paddingLeft: `${entry.depth * 20}px` }}>
         {editing ? (
           <div className="grid gap-2 md:grid-cols-[1fr_260px]">
-            <label className="text-xs font-black text-slate-500">
+            <label className="text-xs font-normal text-slate-500">
               Название
               <input className="field mt-1 h-10" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
             </label>
-            <label className="text-xs font-black text-slate-500">
+            <label className="text-xs font-normal text-slate-500">
               Материнский элемент
               <ParentSelect className="field mt-1 h-10" value={draft.parent} nodes={nodes.filter((item) => item.key !== node.key && !isDescendant(nodes, item.key, node.key))} onChange={(parent) => setDraft({ ...draft, parent })} />
             </label>
@@ -550,11 +550,11 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
               ) : (
                 <span className="flex h-6 w-6 shrink-0" />
               )}
-              <p className="min-w-0 truncate text-sm font-black text-refDark">{node.name}</p>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${node.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>{node.active ? "активен" : "архив"}</span>
+              <p className="min-w-0 truncate text-sm font-normal text-refDark">{node.name}</p>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-normal ${node.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>{node.active ? "активен" : "архив"}</span>
             </div>
             <div className="ml-8 mt-1">
-              <span className={`text-xs font-bold ${node.operationCount > 0 ? "text-refGreen" : "text-slate-500"}`}>{node.operationCount > 0 ? "Используется" : "Не используется"}</span>
+              <span className={`text-xs font-normal ${node.operationCount > 0 ? "text-refGreen" : "text-slate-500"}`}>{node.operationCount > 0 ? "Используется" : "Не используется"}</span>
             </div>
           </>
         )}
@@ -590,9 +590,9 @@ function UsageModal({ node, data, close, openPlan }: { node: TreeNode; data: Boo
                 if (event.key === "Enter") open();
               }}
             >
-              <p className="text-sm font-black text-refDark">{plan ? `План ${planPeriod(plan)}` : "План не найден"}</p>
-              <p className="mt-1 text-xs font-bold text-slate-600">{displaySectionName(operation.section_name)} · {displayOperationName(operation.name)}</p>
-              <p className="mt-1 text-xs font-bold text-slate-500">У кого: {planOwnerLabel(plan?.status)}</p>
+              <p className="text-sm font-normal text-refDark">{plan ? `План ${planPeriod(plan)}` : "План не найден"}</p>
+              <p className="mt-1 text-xs font-normal text-slate-600">{displaySectionName(operation.section_name)} · {displayOperationName(operation.name)}</p>
+              <p className="mt-1 text-xs font-normal text-slate-500">У кого: {planOwnerLabel(plan?.status)}</p>
             </div>
           );
         })}

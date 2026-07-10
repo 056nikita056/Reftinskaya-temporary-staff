@@ -55,7 +55,7 @@ export function FactsV2({ role, access: permissions, view, setView, data, mutate
 
   return (
     <div className="space-y-3 pb-2">
-      <h2 className="text-xl font-black">Работа на участках</h2>
+      <h2 className="text-xl font-normal">Работа на участках</h2>
       {plans.map((plan) => {
         const operations = data.operations.filter((operation) => operation.plan_id === plan.id);
         const temporaryStaff = operations.reduce((sum, operation) => sum + factPersonnelCountV2(operation, data.assignments), 0);
@@ -63,17 +63,17 @@ export function FactsV2({ role, access: permissions, view, setView, data, mutate
           <button key={plan.id} className="w-full rounded-lg bg-slate-100 p-4 text-left shadow-sm transition hover:bg-slate-200" onClick={() => setView({ type: "facts", planId: plan.id })}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-black">План {planPeriod(plan)}</p>
-                <p className="mt-1 text-xs font-black text-slate-600">Временный персонал: {temporaryStaff}</p>
+                <p className="font-normal">План {planPeriod(plan)}</p>
+                <p className="mt-1 text-xs font-normal text-slate-600">Временный персонал: {temporaryStaff}</p>
               </div>
-              <p className={`shrink-0 text-xs font-black ${statusTone(displayPlanStatusForRole(plan, "factory"))}`}>{displayPlanStatusForRole(plan, "factory")}</p>
+              <p className={`shrink-0 text-xs font-normal ${statusTone(displayPlanStatusForRole(plan, "factory"))}`}>{displayPlanStatusForRole(plan, "factory")}</p>
             </div>
           </button>
         );
       })}
       {!plans.length && <FactsEmpty access={access} data={data} />}
       {data.pagination?.facts.nextCursor && (
-        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-black text-refGreen hover:bg-emerald-50" onClick={() => loadMore("facts")}>
+        <button className="mx-auto flex rounded-md bg-slate-100 px-4 py-2 text-sm font-normal text-refGreen hover:bg-emerald-50" onClick={() => loadMore("facts")}>
           Загрузить еще факты
         </button>
       )}
@@ -133,7 +133,7 @@ function FactPlanViewV2({ planId, plan, data, back, openOperation }: { planId: s
 
   return (
     <div className="space-y-3 pb-2">
-      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
+      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
       <FactSummaryV2
         cells={[
           ["Начало работ", plan?.start_date || "-"],
@@ -143,15 +143,15 @@ function FactPlanViewV2({ planId, plan, data, back, openOperation }: { planId: s
       />
       {days.map((day, index) => (
         <section key={day} className="space-y-2">
-          <div className="bg-slate-200 px-3 py-2 text-center text-sm font-black">{day}</div>
+          <div className="bg-slate-200 px-3 py-2 text-center text-sm font-normal">{day}</div>
           {groups.flatMap(({ section, rows }) => rows.slice(0, 2).map((operation) => (
-            <button key={`${day}-${operation.id}`} className="grid w-full grid-cols-[1fr_auto_2.75rem] items-center rounded border border-slate-400 bg-white text-sm font-bold" onClick={() => openOperation(operation.id)}>
+            <button key={`${day}-${operation.id}`} className="grid w-full grid-cols-[1fr_auto_2.75rem] items-center rounded border border-slate-400 bg-white text-sm font-normal" onClick={() => openOperation(operation.id)}>
               <span className="truncate px-3 py-2 text-left">{displaySectionName(section)}</span>
               <span className="border-l border-slate-400 px-3 py-2 text-slate-600">Персонал</span>
               <span className="border-l border-slate-400 px-2 py-2 text-center">{factPersonnelCountV2(operation, data.assignments)}</span>
             </button>
           )))}
-          {index === 1 && <div className="bg-slate-200 px-3 py-2 text-center text-sm font-black">Дата плана</div>}
+          {index === 1 && <div className="bg-slate-200 px-3 py-2 text-center text-sm font-normal">Дата плана</div>}
         </section>
       ))}
       {!operations.length && <Empty text="В плане пока нет участков для фиксации" />}
@@ -173,9 +173,9 @@ function FactWorkV2({ access, initialSide, edit, planId, operationId, data, muta
 
   return (
     <div className="relative space-y-3 pb-2">
-      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
+      <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
       {access.factory && access.out && (
-        <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1 text-sm font-black">
+        <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1 text-sm font-normal">
           <button className={`rounded px-3 py-2 ${side === "factory" ? "bg-white text-refGreen shadow-sm" : "text-slate-600"}`} onClick={() => setSide("factory")} type="button">
             Фабрика
           </button>
@@ -199,7 +199,7 @@ function FactWorkV2({ access, initialSide, edit, planId, operationId, data, muta
         };
         return (
           <div key={employee.id} className="overflow-hidden rounded-md border border-slate-200 bg-white">
-            <div className="bg-slate-200 px-3 py-2 text-center text-sm font-black">{displayEmployeeName(employee)}</div>
+            <div className="bg-slate-200 px-3 py-2 text-center text-sm font-normal">{displayEmployeeName(employee)}</div>
             <div className="space-y-2 p-3">
               <FactLineV2 label="Операция" checked={fact?.operation_done} value={displayOperationName(operation?.name)} disabled={operationLocked} explainDisabled={!sideAllowed} onToggle={() => upsert({ operation_done: fact?.operation_done ? 0 : 1 })} onExplain={openExplain} />
               <FactLineV2 label="Начало" checked={fact?.start_done} value={fact?.started_at || (edit ? "10:00" : "--:--")} disabled={operationLocked} explainDisabled={!sideAllowed} onToggle={() => upsert({ start_done: fact?.start_done ? 0 : 1, started_at: fact?.started_at || "10:00" })} onExplain={openExplain} />
@@ -215,7 +215,7 @@ function FactWorkV2({ access, initialSide, edit, planId, operationId, data, muta
           <Pencil size={24} />
         </button>
       ) : edit ? (
-        <button className="fixed bottom-20 right-5 z-20 rounded-full bg-refGreen px-5 py-3 text-sm font-black text-white shadow-panel" onClick={closeEdit}>
+        <button className="fixed bottom-20 right-5 z-20 rounded-full bg-refGreen px-5 py-3 text-sm font-normal text-white shadow-panel" onClick={closeEdit}>
           Сохранить
         </button>
       ) : null}
@@ -231,11 +231,11 @@ function factPersonnelCountV2(operation: Operation, assignments: Assignment[]) {
 
 function FactSummaryV2({ cells }: { cells: Array<[string, string]> }) {
   return (
-    <div className="grid grid-cols-3 overflow-hidden rounded-md bg-refGreen text-center text-xs font-black text-white shadow-sm">
+    <div className="grid grid-cols-3 overflow-hidden rounded-md bg-refGreen text-center text-xs font-normal text-white shadow-sm">
       {cells.map(([label, value]) => (
         <div key={label} className="px-2 py-3">
           <p>{label}</p>
-          <p className="mt-1 font-bold opacity-90">{value}</p>
+          <p className="mt-1 font-normal opacity-90">{value}</p>
         </div>
       ))}
     </div>
@@ -245,7 +245,7 @@ function FactSummaryV2({ cells }: { cells: Array<[string, string]> }) {
 function FactLineV2({ label, checked, value, bad, disabled, explainDisabled, onToggle, onExplain }: { label: string; checked?: number; value: string; bad?: boolean; disabled?: boolean; explainDisabled?: boolean; onToggle: () => void; onExplain: () => void }) {
   return (
     <div className="grid grid-cols-[4.2rem_1.75rem_1fr_auto] items-center gap-2 text-sm">
-      <span className="font-black">{label}</span>
+      <span className="font-normal">{label}</span>
       <button
         className={`flex h-7 w-7 items-center justify-center rounded border-2 text-white ${checked ? (bad ? "border-red-600 bg-red-600" : "border-refGreen bg-refGreen") : "border-slate-400 bg-white"} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
         disabled={disabled}
@@ -253,8 +253,8 @@ function FactLineV2({ label, checked, value, bad, disabled, explainDisabled, onT
       >
         {checked ? (bad ? <X size={18} /> : <Check size={18} />) : null}
       </button>
-      <div className="min-h-7 rounded border border-slate-400 bg-white px-2 py-1 text-center font-bold leading-5">{value || ""}</div>
-      <button className="text-xs font-black text-blue-700 underline disabled:cursor-not-allowed disabled:text-slate-400" disabled={explainDisabled} onClick={onExplain}>Пояснение...</button>
+      <div className="min-h-7 rounded border border-slate-400 bg-white px-2 py-1 text-center font-normal leading-5">{value || ""}</div>
+      <button className="text-xs font-normal text-blue-700 underline disabled:cursor-not-allowed disabled:text-slate-400" disabled={explainDisabled} onClick={onExplain}>Пояснение...</button>
     </div>
   );
 }
@@ -281,15 +281,15 @@ function ExplainModalV2({ canEdit, context, data, mutate, close, planId, operati
       <div className="space-y-3">
         {explanations.length ? explanations.map((item) => (
           <div key={item.id} className="rounded-xl bg-slate-100 p-4 text-sm">
-            <p className="font-black">{item.author_name}</p>
-            <p className="text-xs font-bold text-slate-600">{item.author_role}</p>
+            <p className="font-normal">{item.author_name}</p>
+            <p className="text-xs font-normal text-slate-600">{item.author_role}</p>
             <p className="mt-3">{item.text}</p>
             <p className="mt-2 text-right text-xs text-slate-500">{item.created_at || workDate}</p>
           </div>
         )) : (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm">
-            <p className="font-black">Пояснений пока нет</p>
-            <p className="mt-1 text-xs font-bold text-slate-600">{displayEmployeeName(context.employee)} · {workDate}</p>
+            <p className="font-normal">Пояснений пока нет</p>
+            <p className="mt-1 text-xs font-normal text-slate-600">{displayEmployeeName(context.employee)} · {workDate}</p>
             <p className="mt-3 text-slate-500">Добавьте комментарий по этому сотруднику, операции и дню.</p>
           </div>
         )}
@@ -297,13 +297,13 @@ function ExplainModalV2({ canEdit, context, data, mutate, close, planId, operati
         <div className="flex justify-center gap-3 pt-2">
           {!adding ? (
             <>
-              <button className="rounded-full bg-red-600 px-6 py-3 text-sm font-black text-white" onClick={close}>Закрыть</button>
-              {canEdit && <button className="rounded-full bg-refGreen px-6 py-3 text-sm font-black text-white" onClick={() => setAdding(true)}>Добавить</button>}
+              <button className="rounded-full bg-red-600 px-6 py-3 text-sm font-normal text-white" onClick={close}>Закрыть</button>
+              {canEdit && <button className="rounded-full bg-refGreen px-6 py-3 text-sm font-normal text-white" onClick={() => setAdding(true)}>Добавить</button>}
             </>
           ) : (
             <>
-              <button className="rounded-full bg-red-600 px-6 py-3 text-sm font-black text-white" onClick={() => setAdding(false)}>Отменить</button>
-              <button className="rounded-full bg-refGreen px-6 py-3 text-sm font-black text-white disabled:bg-slate-300" onClick={save} disabled={!text.trim()}>Сохранить</button>
+              <button className="rounded-full bg-red-600 px-6 py-3 text-sm font-normal text-white" onClick={() => setAdding(false)}>Отменить</button>
+              <button className="rounded-full bg-refGreen px-6 py-3 text-sm font-normal text-white disabled:bg-slate-300" onClick={save} disabled={!text.trim()}>Сохранить</button>
             </>
           )}
         </div>

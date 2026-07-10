@@ -276,9 +276,9 @@ export function App() {
           logout={logout}
         />
 
-        {legacyError && legacyEnabled && <div className="mx-auto mt-3 max-w-[1400px] rounded-md bg-red-50 px-4 py-2 text-sm font-bold text-red-700">{legacyError}</div>}
+        {legacyError && legacyEnabled && <div className="mx-auto mt-3 max-w-[1400px] rounded-md bg-red-50 px-4 py-2 text-sm font-normal text-red-700">{legacyError}</div>}
         {!online && <OfflineNotice hasData={Boolean(data)} />}
-        {notice && <div className={`fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-md px-4 py-2 text-sm font-black text-white shadow-panel ${noticeTone === "error" ? "bg-red-600" : noticeTone === "warning" ? "bg-orange-500" : "bg-refGreen"}`}>{notice}</div>}
+        {notice && <div className={`fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-md px-4 py-2 text-sm font-normal text-white shadow-panel ${noticeTone === "error" ? "bg-red-600" : noticeTone === "warning" ? "bg-orange-500" : "bg-refGreen"}`}>{notice}</div>}
 
         <div className="grid min-h-[100dvh] w-full lg:grid-cols-[260px_1fr]">
           <Sidebar
@@ -455,15 +455,15 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
       <section className="w-full max-w-[390px] rounded-2xl bg-white p-6 shadow-panel">
         <div className="mb-4 text-center">
-          <h1 className="text-2xl font-black leading-tight text-refDark">Вход в систему</h1>
+          <h1 className="text-2xl font-normal leading-tight text-refDark">Вход в систему</h1>
         </div>
 
         <form className="space-y-3" onSubmit={submit}>
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Логин</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Логин</span>
             <input className="field" value={login} onChange={(event) => setLogin(event.target.value)} placeholder="admin" />
           </label>
-          {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
+          {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-normal text-red-700">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Входим..." : "Войти"}</button>
         </form>
       </section>
@@ -476,8 +476,8 @@ function FactoryChoice({ factories, selectedFactoryId, submitting, error, onSele
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
       <section className="w-full max-w-[520px] rounded-2xl bg-white p-6 shadow-panel">
         <div className="mb-5">
-          <h1 className="text-2xl font-black leading-tight text-refDark">Выберите фабрику</h1>
-          <p className="mt-1 text-sm font-bold text-slate-500">Доступно несколько рабочих областей</p>
+          <h1 className="text-2xl font-normal leading-tight text-refDark">Выберите фабрику</h1>
+          <p className="mt-1 text-sm font-normal text-slate-500">Доступно несколько рабочих областей</p>
         </div>
         <div className="grid gap-2">
           {factories.map((factory) => (
@@ -492,16 +492,16 @@ function FactoryChoice({ factories, selectedFactoryId, submitting, error, onSele
                   <FactoryIcon size={20} />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-black text-refDark">{factory.name}</span>
-                  <span className="block truncate text-xs font-bold text-slate-500">{factory.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</span>
+                  <span className="block truncate text-sm font-normal text-refDark">{factory.name}</span>
+                  <span className="block truncate text-xs font-normal text-slate-500">{factory.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</span>
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-black text-refGreen">{factory.id === selectedFactoryId ? "Основная" : ""}</span>
+              <span className="shrink-0 text-xs font-normal text-refGreen">{factory.id === selectedFactoryId ? "Основная" : ""}</span>
             </button>
           ))}
         </div>
-        {error && <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
-        <button className="mt-4 rounded-md bg-slate-200 px-4 py-2 text-sm font-black text-slate-700" disabled={submitting} onClick={onBack}>
+        {error && <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm font-normal text-red-700">{error}</p>}
+        <button className="mt-4 rounded-md bg-slate-200 px-4 py-2 text-sm font-normal text-slate-700" disabled={submitting} onClick={onBack}>
           Назад
         </button>
       </section>
@@ -534,22 +534,22 @@ function PasswordChange({
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#eef2f1] px-4 py-6">
       <section className="w-full max-w-[390px] rounded-2xl bg-white p-6 shadow-panel">
         <div className="mb-4 text-center">
-          <h1 className="text-2xl font-black leading-tight text-refDark">Смена пароля</h1>
-          <p className="mt-1 text-sm font-bold text-slate-500">{login}</p>
+          <h1 className="text-2xl font-normal leading-tight text-refDark">Смена пароля</h1>
+          <p className="mt-1 text-sm font-normal text-slate-500">{login}</p>
         </div>
         <form className="space-y-3" onSubmit={onSubmit}>
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Новый пароль</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Новый пароль</span>
             <input className={`field ${error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" autoComplete="new-password" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Повторите пароль</span>
+            <span className="mb-1 block text-xs font-normal text-slate-500">Повторите пароль</span>
             <input className={`field ${error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`} value={repeatPassword} onChange={(event) => setRepeatPassword(event.target.value)} type="password" autoComplete="new-password" />
           </label>
-          {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
+          {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-normal text-red-700">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Сохраняем..." : "Сменить пароль"}</button>
         </form>
-        <button className="mt-3 w-full rounded-md bg-slate-200 px-4 py-2 text-sm font-black text-slate-700" disabled={submitting} onClick={onBack}>
+        <button className="mt-3 w-full rounded-md bg-slate-200 px-4 py-2 text-sm font-normal text-slate-700" disabled={submitting} onClick={onBack}>
           Назад
         </button>
       </section>
@@ -562,8 +562,8 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
     <aside className="hidden border-r border-slate-200 bg-white px-3 py-6 lg:block">
       <img src="/ref-logo.png" alt="REF" className="h-14 w-24 object-contain" />
       <div className="mt-5">
-        <p className="text-sm font-black text-refDark">{profile?.factoryName || selectedFactory?.name || "Рефтинская птицефабрика"}</p>
-        <p className="mt-1 text-xs font-bold text-slate-500">{selectedFactory?.timezone?.replace("Asia/", "UTC+5 · ") || profile?.factory?.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</p>
+        <p className="text-sm font-normal text-refDark">{profile?.factoryName || selectedFactory?.name || "Рефтинская птицефабрика"}</p>
+        <p className="mt-1 text-xs font-normal text-slate-500">{selectedFactory?.timezone?.replace("Asia/", "UTC+5 · ") || profile?.factory?.timezone?.replace("Asia/", "UTC+5 · ") || "UTC+5"}</p>
       </div>
       <nav className="mt-10 space-y-2">
         {modules.map((key) => {
@@ -577,8 +577,8 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
         })}
       </nav>
       <div className="mt-[min(38vh,360px)] border-t border-slate-200 pt-6">
-        <p className="text-sm font-black text-refDark">{profile?.fullName || "Пользователь"}</p>
-        <p className="mt-1 text-xs font-bold text-slate-500">{profile?.role || role}</p>
+        <p className="text-sm font-normal text-refDark">{profile?.fullName || "Пользователь"}</p>
+        <p className="mt-1 text-xs font-normal text-slate-500">{profile?.role || role}</p>
       </div>
     </aside>
   );
@@ -591,8 +591,8 @@ function MobileHeader({ active, selectedFactory, openModule, logout }: { active:
         <div className="flex min-w-0 items-center gap-3">
           <img src="/ref-logo.png" alt="REF" className="h-10 w-14 object-contain" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-black">{labelForModule(active)}</p>
-            <p className="truncate text-xs font-bold text-slate-500">{selectedFactory?.name || "Рабочая область"}</p>
+            <p className="truncate text-sm font-normal">{labelForModule(active)}</p>
+            <p className="truncate text-xs font-normal text-slate-500">{selectedFactory?.name || "Рабочая область"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -614,7 +614,7 @@ function MobileNav({ modules, active, setActive }: { modules: ModuleKey[]; activ
       {modules.map((key) => {
         const Icon = moduleIcon(key);
         return (
-          <button key={key} className={`flex min-w-[96px] flex-1 flex-col items-center gap-1 px-2 py-2 text-[10px] font-black ${active === key ? "text-refGreen" : "text-slate-600"}`} onClick={() => setActive(key)}>
+          <button key={key} className={`flex min-w-[96px] flex-1 flex-col items-center gap-1 px-2 py-2 text-[10px] font-normal ${active === key ? "text-refGreen" : "text-slate-600"}`} onClick={() => setActive(key)}>
             <Icon size={18} />
             {labelForModule(key)}
           </button>
@@ -712,7 +712,7 @@ function Workspace({
 
 function OfflineNotice({ hasData }: { hasData: boolean }) {
   return (
-    <div className="mx-auto mt-3 max-w-[1400px] rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-800">
+    <div className="mx-auto mt-3 max-w-[1400px] rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-normal text-orange-800">
       {hasData ? "Нет сети, данные могут быть неактуальны." : "Нет сети. Данные могут быть неактуальны, часть действий временно недоступна."}
     </div>
   );
@@ -722,13 +722,13 @@ function ActionDialog({ dialog, close }: { dialog: ActionDialogState; close: (co
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
       <section className="w-full max-w-sm rounded-xl bg-white p-4 shadow-panel">
-        <h2 className="text-lg font-black text-refDark">{dialog.title}</h2>
-        <p className="mt-2 text-sm font-semibold leading-5 text-slate-600">{dialog.message}</p>
+        <h2 className="text-lg font-normal text-refDark">{dialog.title}</h2>
+        <p className="mt-2 text-sm font-normal leading-5 text-slate-600">{dialog.message}</p>
         <div className="mt-5 grid grid-cols-2 gap-2">
-          <button className="h-11 rounded-md bg-slate-200 px-3 text-sm font-black text-slate-700" onClick={() => close(false)}>
+          <button className="h-11 rounded-md bg-slate-200 px-3 text-sm font-normal text-slate-700" onClick={() => close(false)}>
             {dialog.cancelLabel}
           </button>
-          <button className={`h-11 rounded-md px-3 text-sm font-black text-white ${dialog.tone === "error" ? "bg-red-600" : dialog.tone === "warning" ? "bg-orange-500" : "bg-refGreen"}`} onClick={() => close(true)}>
+          <button className={`h-11 rounded-md px-3 text-sm font-normal text-white ${dialog.tone === "error" ? "bg-red-600" : dialog.tone === "warning" ? "bg-orange-500" : "bg-refGreen"}`} onClick={() => close(true)}>
             {dialog.confirmLabel}
           </button>
         </div>

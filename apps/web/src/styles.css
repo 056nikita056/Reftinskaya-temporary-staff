@@ -24,11 +24,11 @@ body {
 
 @layer components {
   .field {
-    @apply h-11 w-full rounded-md border border-slate-300 px-3 text-base font-semibold outline-none transition focus:border-refGreen focus:ring-2 focus:ring-refGreen/20;
+    @apply h-11 w-full rounded-md border border-slate-300 px-3 text-base font-normal outline-none transition focus:border-refGreen focus:ring-2 focus:ring-refGreen/20;
   }
 
   .btn-primary {
-    @apply inline-flex h-11 items-center justify-center rounded-md bg-refGreen px-4 text-sm font-black text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300;
+    @apply inline-flex h-11 items-center justify-center rounded-md bg-refGreen px-4 text-sm font-normal text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300;
   }
 
   .icon-button {
@@ -36,7 +36,7 @@ body {
   }
 
   .nav-item {
-    @apply flex h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-bold text-slate-600 transition hover:bg-slate-100;
+    @apply flex h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-normal text-slate-600 transition hover:bg-slate-100;
   }
 
   .nav-item-active {

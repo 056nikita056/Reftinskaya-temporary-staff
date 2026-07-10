@@ -22,12 +22,12 @@ export function Dashboard({ data }: { data: BootstrapData }) {
           {statusCounts.length ? (
             statusCounts.map(([status, count]) => (
               <div key={status} className="flex items-center justify-between rounded-md bg-slate-50 p-3">
-                <span className={`text-sm font-black ${statusTone(status)}`}>{status}</span>
-                <span className="text-lg font-black">{count}</span>
+                <span className={`text-sm font-normal ${statusTone(status)}`}>{status}</span>
+                <span className="text-lg font-normal">{count}</span>
               </div>
             ))
           ) : (
-            <p className="rounded-md bg-slate-50 p-3 text-sm font-black text-slate-500 md:col-span-2">Нет данных</p>
+            <p className="rounded-md bg-slate-50 p-3 text-sm font-normal text-slate-500 md:col-span-2">Нет данных</p>
           )}
         </div>
       </Panel>
@@ -39,8 +39,8 @@ function Metric({ label, value, icon }: { label: string; value: number | string;
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-refGreen text-white">{icon}</div>
-      <p className="text-2xl font-black">{value}</p>
-      <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
+      <p className="text-2xl font-normal">{value}</p>
+      <p className="text-xs font-normal uppercase text-slate-500">{label}</p>
     </div>
   );
 }
