@@ -214,6 +214,15 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
       : { parent_id: target.id, section_id: target.sectionId ?? null }, "Элемент перенесен");
   };
 
+  const moveNodeToRoot = async (node: TreeNode) => {
+    if (!node.parentKey) return;
+    if (node.source === "section") {
+      await mutate(`/sections/${node.id}`, "PUT", { parent_id: null }, "Элемент перенесен");
+      return;
+    }
+    await mutate(`/operation-catalog/${node.id}`, "PUT", { parent_id: null, section_id: null }, "Элемент перенесен");
+  };
+
   const selectNode = (node: TreeNode, range = false) => {
     if (range && selectedKey) {
       const from = visibleTree.findIndex((entry) => entry.node.key === selectedKey);
@@ -256,6 +265,14 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
     setDropKey("");
     if (!draggedNode) return;
     await moveNode(draggedNode, target);
+  };
+
+  const finishRootDrop = async () => {
+    const draggedNode = dictionaryNodes.find((node) => node.key === draggedKey);
+    setDraggedKey("");
+    setDropKey("");
+    if (!draggedNode) return;
+    await moveNodeToRoot(draggedNode);
   };
 
   return (
@@ -328,7 +345,20 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
             )}
           </div>
         </div>
-        <div className="min-h-[calc(100vh-23rem)] p-2" onClick={clearSelection}>
+        <div
+          className={`min-h-[calc(100vh-23rem)] p-2 ${draggedKey ? "transition-colors hover:bg-slate-50" : ""}`}
+          onClick={clearSelection}
+          onDragOver={(event) => {
+            if (!draggedKey) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            if (!draggedKey) return;
+            event.preventDefault();
+            void finishRootDrop();
+          }}
+        >
         {visibleTree.map((entry) => (
           <TreeRow
             key={entry.node.key}
