@@ -246,7 +246,12 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
       rate_per_hour: source ? numberValue(source.rate_per_hour, 300) : 300
     }, source ? "Строка продублирована" : "Строка добавлена");
   };
-  const removeOperation = async (operation: Operation) => {
+  const removeOperation = async (plan: Plan, operation: Operation) => {
+    const planRows = operations.filter((row) => row.plan_id === plan.id);
+    if (planRows.length <= 1) {
+      await mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
+      return;
+    }
     await mutate(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
   };
   const copyPlan = async (plan: Plan) => {
@@ -303,7 +308,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                     {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><CopyPlus size={15} /></IconAction>}
-                    {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(operation)}><Trash2 size={15} /></IconAction>}
+                    {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(plan, operation)}><Trash2 size={15} /></IconAction>}
                   </div>
                 </Td>
               </tr>
