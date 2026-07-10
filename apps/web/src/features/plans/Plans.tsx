@@ -360,7 +360,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       </div>
       <div className="overflow-auto">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-normal uppercase text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-100 text-sm font-normal uppercase text-slate-500">
           <tr>
             <Th>Начало</Th>
             <Th>Окончание</Th>
@@ -415,7 +415,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
                 <Td><span className={`font-normal ${statusTone(displayStatus)}`}>{displayStatus}</span></Td>
                 <Td><span className="font-normal text-refDark">План</span></Td>
-                <Td><span className="text-xs font-normal text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
+                <Td><span className="font-normal text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
                 <Td numeric>{planRequired}</Td>
                 <Td numeric>{planStaff}</Td>
                 <Td numeric>{planOutsource}</Td>
