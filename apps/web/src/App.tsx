@@ -231,7 +231,6 @@ export function App() {
   }, [loggedIn, data?.currentUser]);
 
   const openModule = (key: ModuleKey) => {
-    if (key === active) return;
     setActive(key);
     setView({ type: "list" });
   };
