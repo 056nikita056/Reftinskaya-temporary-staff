@@ -514,6 +514,26 @@ function PlanFlowNotice({ kind, plan }: { kind: PlanKind; plan: Plan }) {
 }
 
 function PlanHeader({ plan, displayStatus = internalPlanStatusLabel(plan), dates, setDates, edit }: { plan: Plan; displayStatus?: string; dates: { start_date: string; end_date: string }; setDates: (value: { start_date: string; end_date: string }) => void; edit: boolean }) {
+  if (edit) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="grid gap-2 md:grid-cols-[12rem_12rem_1fr]">
+          <label className="text-[11px] font-black uppercase text-slate-500">
+            Начало работ
+            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.start_date} onChange={(e) => setDates({ ...dates, start_date: e.target.value })} />
+          </label>
+          <label className="text-[11px] font-black uppercase text-slate-500">
+            Окончание работ
+            <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black text-refDark outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" value={dates.end_date} onChange={(e) => setDates({ ...dates, end_date: e.target.value })} />
+          </label>
+          <div className="text-[11px] font-black uppercase text-slate-500">
+            Статус
+            <div className="mt-1 flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-black normal-case text-refDark">{displayStatus}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg bg-refGreen p-3 text-white">
       <div className="grid grid-cols-3 gap-2 text-center text-xs font-black">
@@ -663,7 +683,12 @@ function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], dr
   };
   return (
     <div className="space-y-3">
-      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} onRemove={(editAccess?.factory ?? kind === "factory") ? () => onRemoveOperation?.(row) : undefined} />)}
+      <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 shadow-sm">
+        <div className="space-y-2">
+          {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} onRemove={(editAccess?.factory ?? kind === "factory") ? () => onRemoveOperation?.(row) : undefined} />)}
+          {!drafts.length && <Empty text="Добавьте первую строку плана." />}
+        </div>
+      </div>
       {(editAccess?.factory ?? kind === "factory") && (
         <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-white" onClick={addOperation}>
           <Plus size={16} className="inline" /> Операция

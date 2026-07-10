@@ -47,6 +47,95 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
     if (canOpen) onOpen?.();
   };
 
+  if (edit) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="grid min-w-0 gap-2 xl:grid-cols-[minmax(11rem,1fr)_minmax(14rem,1.4fr)_6.5rem_6.5rem_6.5rem_6.5rem_7rem_2.5rem] xl:items-end">
+          <PlanRowField label="Структура">
+            {canEditFactory ? (
+              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-black text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("section")}>
+                {row.section_id ? displaySectionName(row.section_name) : "Выбрать"}
+              </button>
+            ) : (
+              <ReadonlyCell>{displaySectionName(row.section_name)}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <PlanRowField label="Операция">
+            {canEditFactory ? (
+              <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-black text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("operation")}>
+                {row.name ? displayOperationName(row.name) : "Выбрать"}
+              </button>
+            ) : (
+              <ReadonlyCell>{displayOperationName(row.name)}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <PlanRowField label="Персонал">
+            {canEditFactory ? (
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
+            ) : (
+              <ReadonlyCell align="center">{required}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <PlanRowField label="Штат">
+            {canEditHr ? (
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
+            ) : (
+              <ReadonlyCell align="center">{staff}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <PlanRowField label="Аутсорсинг">
+            <ReadonlyCell align="center" accent>{outsource}</ReadonlyCell>
+          </PlanRowField>
+          <PlanRowField label="Часов">
+            {canEditOut ? (
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.hours_per_day} onChange={(event) => update({ hours_per_day: numberValue(event.target.value) })} />
+            ) : (
+              <ReadonlyCell align="center">{row.hours_per_day}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <PlanRowField label="Ставка">
+            {canEditOut ? (
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} />
+            ) : (
+              <ReadonlyCell align="center">{row.rate_per_hour}</ReadonlyCell>
+            )}
+          </PlanRowField>
+          <div className="flex items-end justify-end">
+            {onRemove ? (
+              <button className="flex h-9 w-9 items-center justify-center rounded bg-red-50 text-red-600 transition hover:bg-red-100" type="button" title="Удалить операцию" onClick={onRemove}>
+                <Trash2 size={16} />
+              </button>
+            ) : (
+              <span className="hidden h-9 w-9 xl:block" />
+            )}
+          </div>
+        </div>
+        {picker === "section" && (
+          <CatalogPicker
+            title="Выбор участка"
+            emptyText="Нет элементов структуры."
+            entries={sectionTree}
+            selectedId={row.section_id ? `section:${row.section_id}` : ""}
+            selectable={() => true}
+            onSelect={(entry) => selectSection(entry.id)}
+            close={() => setPicker(null)}
+          />
+        )}
+        {picker === "operation" && (
+          <CatalogPicker
+            title="Выбор операции"
+            emptyText="Нет операций."
+            entries={operationTree}
+            selectedId={row.operation_id ? `operation:${row.operation_id}` : ""}
+            selectable={() => true}
+            onSelect={(entry) => selectOperation(entry.key)}
+            close={() => setPicker(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`rounded-md border border-slate-200 bg-white p-2.5 text-left shadow-sm ${canOpen ? "cursor-pointer transition hover:border-refGreen hover:bg-emerald-50/40" : ""}`}
@@ -181,6 +270,23 @@ function CatalogPicker({ title, emptyText, entries, selectedId, selectable, onSe
         {!visibleEntries.length && <p className="p-4 text-sm font-bold text-slate-500">{emptyText}</p>}
       </div>
     </Modal>
+  );
+}
+
+function PlanRowField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="min-w-0 text-[11px] font-black uppercase text-slate-500">
+      {label}
+      <div className="mt-1">{children}</div>
+    </label>
+  );
+}
+
+function ReadonlyCell({ children, align = "left", accent }: { children: ReactNode; align?: "left" | "center"; accent?: boolean }) {
+  return (
+    <div className={`flex h-9 min-w-0 items-center rounded border border-slate-200 bg-slate-50 px-2 text-sm font-black ${align === "center" ? "justify-center text-center" : ""} ${accent ? "text-refGreen" : "text-refDark"}`}>
+      <span className="min-w-0 truncate">{children}</span>
+    </div>
   );
 }
 
