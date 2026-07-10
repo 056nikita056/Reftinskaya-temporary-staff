@@ -1,6 +1,14 @@
 import type { Employee, Operation, Plan, Reservation } from "../api/client";
 import type { PlanKind } from "./types";
 
+export type PlanStatusCode =
+  | "draft"
+  | "submitted_to_hr"
+  | "received_by_outsourcer"
+  | "on_approval"
+  | "approved"
+  | "rejected";
+
 export function todayRu() {
   return new Date().toLocaleDateString("ru-RU");
 }
@@ -46,26 +54,75 @@ export function planPeriod(plan?: Plan) {
   return `с ${plan.start_date} по ${plan.end_date}`;
 }
 
+export function planStatusCode(plan?: Plan): PlanStatusCode | string {
+  if (!plan) return "";
+  if (plan.status_code) return plan.status_code;
+  return planStatusCodeFromLabel(plan.status);
+}
+
+export function planStatusCodeFromLabel(status?: string): PlanStatusCode | string {
+  if (["В доработке", "У планировщика фабрики"].includes(status || "")) return "draft";
+  if (["Отправлено", "У HR"].includes(status || "")) return "submitted_to_hr";
+  if (["Получено", "У аутсорсера"].includes(status || "")) return "received_by_outsourcer";
+  if (["На согласовании", "У согласующего"].includes(status || "")) return "on_approval";
+  if (["На очереди", "Утверждено", "У мастеров"].includes(status || "")) return "approved";
+  if (["Не утверждено", "У аутсорсера (доработка)"].includes(status || "")) return "rejected";
+  return status || "";
+}
+
+export function internalPlanStatusLabel(plan?: Plan) {
+  const code = planStatusCode(plan);
+  if (code === "draft") return "У планировщика фабрики";
+  if (code === "submitted_to_hr") return "У HR";
+  if (code === "received_by_outsourcer") return "У аутсорсера";
+  if (code === "on_approval") return "У согласующего";
+  if (code === "approved") return "У мастеров";
+  if (code === "rejected") return "У аутсорсера (доработка)";
+  return plan?.status || "-";
+}
+
+export function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
+  const code = planStatusCode(plan);
+  if (kind === "factory") {
+    if (code === "draft") return "Получено";
+    if (["submitted_to_hr", "received_by_outsourcer", "on_approval"].includes(code)) return "Отправлено";
+    if (code === "approved") return "Утверждено";
+    if (code === "rejected") return "На доработке у аутсорсера";
+  }
+  if (kind === "hr") {
+    if (code === "draft") return "Ожидает отправки";
+    if (code === "submitted_to_hr") return "Получено";
+    if (["received_by_outsourcer", "on_approval", "approved", "rejected"].includes(code)) return "Отправлено";
+  }
+  if (code === "received_by_outsourcer" || code === "rejected") return "Получено";
+  if (code === "on_approval") return "Отправлено";
+  if (code === "approved") return "Утверждено";
+  if (code === "submitted_to_hr") return "Ожидает HR";
+  return plan.status;
+}
+
 export function canEditPlan(kind: PlanKind, plan?: Plan) {
   if (!plan) return false;
-  if (kind === "factory") return plan.status !== "Завершен";
-  if (kind === "hr") return plan.status === "Отправлено";
-  return ["Получено", "Не утверждено"].includes(plan.status);
+  const code = planStatusCode(plan);
+  if (kind === "factory") return code === "draft";
+  if (kind === "hr") return code === "submitted_to_hr";
+  return ["received_by_outsourcer", "rejected"].includes(code);
 }
 
 export function statusTone(status?: string) {
-  if (["Отправлено", "Получено", "Утверждено", "В работе", "Работает"].includes(status || "")) return "text-refGreen";
-  if (["На согласовании", "На очереди"].includes(status || "")) return "text-blue-600";
-  if (["Не утверждено", "В доработке"].includes(status || "")) return "text-orange-500";
+  if (["Отправлено", "Получено", "Утверждено", "В работе", "Работает", "У HR", "У аутсорсера", "У мастеров"].includes(status || "")) return "text-refGreen";
+  if (["На согласовании", "На очереди", "У согласующего"].includes(status || "")) return "text-blue-600";
+  if (["Не утверждено", "В доработке", "У планировщика фабрики", "У аутсорсера (доработка)", "На доработке у аутсорсера"].includes(status || "")) return "text-orange-500";
   if (["Завершен"].includes(status || "")) return "text-slate-500";
   return "text-orange-500";
 }
 
 export function planApprovalText(plan?: Plan) {
   if (!plan) return "";
-  if (plan.status === "На согласовании") return "На согласовании";
-  if (plan.status === "Не утверждено") return "План не утвержден, доступна доработка";
-  if (plan.status === "На очереди") return "Утвержден, ожидает выхода на участки";
+  const code = planStatusCode(plan);
+  if (code === "on_approval") return "На согласовании";
+  if (code === "rejected") return "План не утвержден, доступна доработка";
+  if (code === "approved") return "Утвержден, ожидает выхода на участки";
   return "";
 }
 

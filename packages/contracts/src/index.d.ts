@@ -119,6 +119,7 @@ export type Plan = {
   start_date: string;
   end_date: string;
   status: string;
+  status_code?: string;
   title?: string;
   required_staff?: number;
   staff_count?: number;

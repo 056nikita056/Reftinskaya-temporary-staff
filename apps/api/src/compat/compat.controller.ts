@@ -380,8 +380,8 @@ export class CompatController {
     const data: Record<string, unknown> = {};
     if ("start_date" in body) data.startDate = parseApiDate(requiredString(body.start_date, "START_DATE_REQUIRED"));
     if ("end_date" in body) data.endDate = parseApiDate(requiredString(body.end_date, "END_DATE_REQUIRED"));
-    if ("status" in body) {
-      const nextStatus = await this.requireStatusByTitle(requiredString(body.status, "STATUS_REQUIRED"));
+    if ("status" in body || "status_code" in body) {
+      const nextStatus = await this.requireStatusByInput(requiredString(body.status_code ?? body.status, "STATUS_REQUIRED"));
       assertPlanStatusTransition(existing.status, nextStatus, roles, activeRole);
       data.statusId = nextStatus.id;
     }
@@ -749,8 +749,9 @@ export class CompatController {
     return status;
   }
 
-  private async requireStatusByTitle(title: string) {
-    const status = await this.prisma.planStatus.findFirst({ where: { title } });
+  private async requireStatusByInput(input: string) {
+    const code = statusCodeFromPlanTitle(input);
+    const status = await this.prisma.planStatus.findFirst({ where: { OR: [{ code }, { title: input }] } });
     if (!status) {
       throw new BadRequestException({
         code: "UNSUPPORTED_PLAN_STATUS",
@@ -966,12 +967,13 @@ function canReadPlan(plan: BootstrapData["plans"][number], permissions: RoleAcce
   const canEditHr = actions.includes("plans.hr.edit");
   const canEditOut = actions.includes("plans.out.edit");
   const canApproveOut = actions.includes("plans.out.approve");
+  const statusCode = plan.status_code || statusCodeFromPlanTitle(plan.status);
   if (canEditFactory && plan.owner_role === "factory") return true;
-  if (canEditHr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
+  if (canEditHr && plan.owner_role === "factory" && statusCode !== "draft") return true;
   if (
     canEditOut &&
     plan.owner_role === "factory" &&
-    ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) &&
+    ["received_by_outsourcer", "rejected", "on_approval", "approved"].includes(statusCode) &&
     planOutsourceNeed(plan) > 0
   ) {
     return true;
@@ -979,7 +981,7 @@ function canReadPlan(plan: BootstrapData["plans"][number], permissions: RoleAcce
   if (
     canApproveOut &&
     plan.owner_role === "factory" &&
-    ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) &&
+    ["on_approval", "approved", "rejected"].includes(statusCode) &&
     planOutsourceNeed(plan) > 0
   ) {
     return true;
@@ -1131,13 +1133,13 @@ function requiredActionsForMutation(resource: MutationResource, method: "POST" |
 function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
   const actions = new Set<AccessAction>();
   if ("start_date" in body || "end_date" in body) actions.add("plans.factory.edit");
-  if ("status" in body) {
-    const status = String(body.status ?? "");
-    if (status === "Отправлено") actions.add("plans.factory.edit");
-    else if (status === "Получено") actions.add("plans.hr.edit");
-    else if (status === "На согласовании") actions.add("plans.out.edit");
-    else if (status === "На очереди" || status === "Не утверждено") actions.add("plans.out.approve");
-    else if (status === "В доработке") actions.add("plans.factory.edit");
+  if ("status" in body || "status_code" in body) {
+    const statusCode = statusCodeFromPlanTitle(String(body.status_code ?? body.status ?? ""));
+    if (statusCode === "submitted_to_hr") actions.add("plans.factory.edit");
+    else if (statusCode === "received_by_outsourcer") actions.add("plans.hr.edit");
+    else if (statusCode === "on_approval") actions.add("plans.out.edit");
+    else if (statusCode === "approved" || statusCode === "rejected") actions.add("plans.out.approve");
+    else if (statusCode === "draft") actions.add("plans.factory.edit");
     else {
       throw new BadRequestException({
         code: "UNSUPPORTED_PLAN_STATUS",
@@ -1147,6 +1149,25 @@ function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
   }
   if (!actions.size) actions.add("plans.edit");
   return [...actions];
+}
+
+function statusCodeFromPlanTitle(status: string): string {
+  const aliases: Record<string, string> = {
+    "В доработке": "draft",
+    "У планировщика фабрики": "draft",
+    "Отправлено": "submitted_to_hr",
+    "У HR": "submitted_to_hr",
+    "Получено": "received_by_outsourcer",
+    "У аутсорсера": "received_by_outsourcer",
+    "На согласовании": "on_approval",
+    "У согласующего": "on_approval",
+    "На очереди": "approved",
+    "Утверждено": "approved",
+    "У мастеров": "approved",
+    "Не утверждено": "rejected",
+    "У аутсорсера (доработка)": "rejected"
+  };
+  return aliases[status] || status;
 }
 
 function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }, roles: UserRole[] = [], activeRole?: UserRole): void {
@@ -1307,7 +1328,7 @@ function mapPlan(plan: {
   id: string;
   startDate: Date;
   endDate: Date;
-  status: { title: string };
+  status: { code: string; title: string };
   operations: Array<{ requiredCount: number; staffCount: number | null; outsourcingCount: number | null }>;
 }) {
   const requiredStaff = plan.operations.reduce((sum, row) => sum + row.requiredCount, 0);
@@ -1318,6 +1339,7 @@ function mapPlan(plan: {
     start_date: formatApiDate(plan.startDate),
     end_date: formatApiDate(plan.endDate),
     status: plan.status.title,
+    status_code: plan.status.code,
     title: "План",
     required_staff: requiredStaff,
     staff_count: staffCount,

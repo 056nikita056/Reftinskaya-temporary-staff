@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
 import { Empty, Modal } from "../../components/common";
-import { displayOperationName, displaySectionName, planPeriod } from "../../domain/display";
+import { displayOperationName, displaySectionName, internalPlanStatusLabel, planPeriod } from "../../domain/display";
 import { useUiFeedback } from "../../ui/feedback";
 
 type ParentValue = "" | `section:${string}` | `operation:${string}`;
@@ -449,10 +449,7 @@ function UsageModal({ node, data, close, openPlan }: { node: TreeNode; data: Boo
 }
 
 function planOwnerLabel(status?: string) {
-  if (status === "В доработке") return "на планировании";
-  if (status === "Отправлено") return "у HR";
-  if (["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(status || "")) return "у аутсорсера";
-  return "-";
+  return internalPlanStatusLabel(status ? { id: "", owner_role: "factory", start_date: "", end_date: "", status } : undefined);
 }
 
 function ParentSelect({ value, nodes, className, onChange }: { value: ParentValue; nodes: TreeNode[]; className?: string; onChange: (value: ParentValue) => void }) {

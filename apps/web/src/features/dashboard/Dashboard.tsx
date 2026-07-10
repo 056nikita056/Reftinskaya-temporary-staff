@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 import { CalendarDays, Check, ClipboardList, Hotel, Users } from "lucide-react";
 import type { BootstrapData } from "../../api/client";
 import { Panel } from "../../components/common";
-import { statusTone } from "../../domain/display";
+import { internalPlanStatusLabel, statusTone } from "../../domain/display";
 
 export function Dashboard({ data }: { data: BootstrapData }) {
-  const activePlans = data.plans.filter((plan) => !["Завершен", "Отменено"].includes(plan.status)).length;
+  const activePlans = data.plans.length;
   const activeFacts = data.facts.filter((fact) => fact.operation_done || fact.start_done || fact.end_done).length;
-  const planStatuses = data.plans.map((plan) => plan.status);
+  const planStatuses = data.plans.map((plan) => internalPlanStatusLabel(plan));
   const statusCounts = Array.from(new Map(planStatuses.map((status) => [status, planStatuses.filter((item) => item === status).length])));
   return (
     <div className="space-y-4">

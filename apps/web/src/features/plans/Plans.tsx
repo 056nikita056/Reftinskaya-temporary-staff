@@ -3,7 +3,7 @@ import { PlanOperationCard, type PlanEditAccess } from "./PlanOperationCard";
 import { Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ViewState } from "../../domain/types";
-import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displaySectionName, numberValue, operationGroups, planApprovalText, planPeriod, statusTone, todayRu } from "../../domain/display";
+import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal, Readonly, SectionTitle } from "../../components/common";
 import { useUiFeedback } from "../../ui/feedback";
 
@@ -68,9 +68,10 @@ function primaryKind(access: PlanAccess, fallbackRole: RoleKey): PlanKind {
 }
 
 function editAccessForPlan(access: PlanAccess, plan: Plan, kind: PlanKind): PlanEditAccess {
+  const code = planStatusCode(plan);
   return {
-    factory: access.factory && plan.status === "В доработке",
-    hr: access.hr && (kind === "hr" ? canEditPlan("hr", plan) : access.factory && plan.status === "В доработке"),
+    factory: access.factory && code === "draft",
+    hr: access.hr && (kind === "hr" ? canEditPlan("hr", plan) : access.factory && code === "draft"),
     out: access.out && kind === "out" && canEditPlan("out", plan)
   };
 }
@@ -80,22 +81,30 @@ function hasEditAccess(access: PlanEditAccess) {
 }
 
 function sendKindForPlan(access: PlanEditAccess, plan: Plan): PlanKind | null {
-  if (plan.status === "В доработке" && access.factory) return "factory";
-  if (plan.status === "Отправлено" && access.hr) return "hr";
-  if (["Получено", "Не утверждено"].includes(plan.status) && access.out) return "out";
+  const code = planStatusCode(plan);
+  if (code === "draft" && access.factory) return "factory";
+  if (code === "submitted_to_hr" && access.hr) return "hr";
+  if (["received_by_outsourcer", "rejected"].includes(code) && access.out) return "out";
   return null;
 }
 
-function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
-  return plan.status;
+function canReadPlan(plan: Plan, access: PlanAccess) {
+  const code = planStatusCode(plan);
+  if (access.factory && plan.owner_role === "factory") return true;
+  if (access.hr && plan.owner_role === "factory" && code !== "draft") return true;
+  if (access.out) return plan.owner_role === "factory" && ["received_by_outsourcer", "rejected", "on_approval", "approved"].includes(code) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+  if (access.outApprove) return plan.owner_role === "factory" && ["on_approval", "approved", "rejected"].includes(code) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
+  return access.view && !access.factory && !access.hr && !access.out && !access.outApprove && plan.owner_role === "factory";
 }
 
-function canReadPlan(plan: Plan, access: PlanAccess) {
-  if (access.factory && plan.owner_role === "factory") return true;
-  if (access.hr && plan.owner_role === "factory" && plan.status !== "В доработке") return true;
-  if (access.out) return plan.owner_role === "factory" && ["Получено", "Не утверждено", "На согласовании", "Утверждено", "На очереди", "В работе", "Завершен"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
-  if (access.outApprove) return plan.owner_role === "factory" && ["На согласовании", "На очереди", "Не утверждено"].includes(plan.status) && calculateOutsource(plan.required_staff, plan.staff_count) > 0;
-  return access.view && !access.factory && !access.hr && !access.out && !access.outApprove && plan.owner_role === "factory";
+function displayPlanStatus(plan: Plan, kind: PlanKind, access: PlanAccess) {
+  const code = planStatusCode(plan);
+  if (kind === "out" && access.outApprove && !access.out) {
+    if (code === "on_approval") return "Получено";
+    if (code === "approved" || code === "rejected") return "Отправлено";
+    if (code === "received_by_outsourcer") return "Ожидает аутсорсера";
+  }
+  return displayPlanStatusForRole(plan, kind);
 }
 
 function operationCreatePayload(row: Operation) {
@@ -171,7 +180,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
                 <p className="font-black">План {planPeriod(plan)}</p>
                 <p className="mt-1 text-sm font-bold text-slate-600">Персонал: {plan.required_staff || 0} · Штат: {plan.staff_count || 0} · Аутсорсинг: {calculateOutsource(plan.required_staff, plan.staff_count)}</p>
               </div>
-              <span className={`text-xs font-black ${statusTone(plan.status)}`}>{displayPlanStatusForRole(plan, kind)}</span>
+              <span className={`text-xs font-black ${statusTone(displayPlanStatus(plan, kind, access))}`}>{displayPlanStatus(plan, kind, access)}</span>
             </div>
           </button>
         ))}
@@ -195,7 +204,8 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
     owner_role: "factory",
     start_date: dates.start_date,
     end_date: dates.end_date,
-    status: "В доработке",
+    status: "У планировщика фабрики",
+    status_code: "draft",
     title: "План",
     required_staff: requiredStaff,
     staff_count: staffCount,
@@ -234,7 +244,8 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
         owner_role: "factory",
         start_date: dates.start_date,
         end_date: dates.end_date,
-        status: "В доработке",
+        status: "У планировщика фабрики",
+        status_code: "draft",
         operations: drafts.map(operationCreatePayload)
       }, "План сохранен");
       if (next) back();
@@ -248,7 +259,7 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={cancel}>Назад</button>
       </div>
-      <PlanHeader plan={plan} dates={dates} setDates={setDates} edit />
+      <PlanHeader plan={plan} displayStatus={displayPlanStatusForRole(plan, "factory")} dates={dates} setDates={setDates} edit />
       <PlanFlowNotice kind="factory" plan={plan} />
       <PlanEditor
         kind="factory"
@@ -284,7 +295,7 @@ function PlansEmpty({ kind, data }: { kind: PlanKind; data: BootstrapData }) {
   }
 
   if (kind === "hr") {
-    const waitingFactory = factoryPlans.some((plan) => ["В доработке"].includes(plan.status));
+    const waitingFactory = factoryPlans.some((plan) => planStatusCode(plan) === "draft");
     return (
       <Empty
         title="Нет планов для HR"
@@ -337,7 +348,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       return;
     }
     if (editAccess.factory) {
-      await mutate(`/plans/${plan.id}`, "PUT", { ...dates, status: plan.status === "Отправлено" ? "В доработке" : plan.status }, "Период сохранен");
+      await mutate(`/plans/${plan.id}`, "PUT", dates, "Период сохранен");
     }
     for (const row of drafts) {
       const required = numberValue(row.required_staff);
@@ -406,8 +417,8 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
     const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     await save();
-    const status = sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
-    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    const status_code = sendKind === "factory" ? "submitted_to_hr" : sendKind === "hr" ? "received_by_outsourcer" : "on_approval";
+    await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
     back();
   };
 
@@ -417,7 +428,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       message: "Утвердить распределение аутсорсера и передать план мастерам?",
       confirmLabel: "Утвердить"
     })) return;
-    await mutate(`/plans/${plan.id}`, "PUT", { status: "На очереди" }, "План утвержден и передан мастерам");
+    await mutate(`/plans/${plan.id}`, "PUT", { status_code: "approved" }, "План утвержден и передан мастерам");
     back();
   };
 
@@ -428,7 +439,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       confirmLabel: "Вернуть",
       tone: "warning"
     })) return;
-    await mutate(`/plans/${plan.id}`, "PUT", { status: "Не утверждено" }, "План возвращен аутсорсеру");
+    await mutate(`/plans/${plan.id}`, "PUT", { status_code: "rejected" }, "План возвращен аутсорсеру");
     back();
   };
 
@@ -440,7 +451,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
-      <PlanHeader plan={plan} displayStatus={displayPlanStatusForRole(plan, kind)} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
+      <PlanHeader plan={plan} displayStatus={displayPlanStatus(plan, kind, access)} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
       <PlanFlowNotice kind={kind} plan={plan} />
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
@@ -457,7 +468,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
           </div>
         </div>
       )}
-      {!isEdit && access.outApprove && plan.status === "На согласовании" && (
+      {!isEdit && access.outApprove && planStatusCode(plan) === "on_approval" && (
         <div className="mt-2 grid gap-2 rounded-lg border border-blue-100 bg-blue-50 p-3 shadow-sm sm:grid-cols-2">
           <button className="h-11 rounded-md bg-orange-500 px-4 text-sm font-black text-white" onClick={returnOutsourcePlan}>
             Вернуть аутсорсеру
@@ -473,9 +484,10 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
 
 function PlanFlowNotice({ kind, plan }: { kind: PlanKind; plan: Plan }) {
   const text = planApprovalText(plan);
-  if (!text && !(kind === "out" && plan.status === "Получено")) return null;
+  const code = planStatusCode(plan);
+  if (!text && !(kind === "out" && code === "received_by_outsourcer")) return null;
   const body =
-    kind === "out" && plan.status === "Получено"
+    kind === "out" && code === "received_by_outsourcer"
       ? "После распределения временного персонала план уйдет на согласование."
       : text;
   return (
@@ -485,7 +497,7 @@ function PlanFlowNotice({ kind, plan }: { kind: PlanKind; plan: Plan }) {
   );
 }
 
-function PlanHeader({ plan, displayStatus = plan.status, dates, setDates, edit }: { plan: Plan; displayStatus?: string; dates: { start_date: string; end_date: string }; setDates: (value: { start_date: string; end_date: string }) => void; edit: boolean }) {
+function PlanHeader({ plan, displayStatus = internalPlanStatusLabel(plan), dates, setDates, edit }: { plan: Plan; displayStatus?: string; dates: { start_date: string; end_date: string }; setDates: (value: { start_date: string; end_date: string }) => void; edit: boolean }) {
   return (
     <div className="rounded-lg bg-refGreen p-3 text-white">
       <div className="grid grid-cols-3 gap-2 text-center text-xs font-black">
@@ -569,7 +581,7 @@ function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back 
 
       {!editable && (
         <div className="rounded-md bg-slate-100 p-3 text-sm font-bold text-slate-600">
-          {canEditOut ? `План в статусе "${plan.status}". Распределение доступно только для статусов "Получено" и "Не утверждено".` : "Нет права на распределение аутсорсинга."}
+          {canEditOut ? `План сейчас: ${internalPlanStatusLabel(plan)}. Распределение доступно только когда план у аутсорсера.` : "Нет права на распределение аутсорсинга."}
         </div>
       )}
       <button className="btn-primary ml-auto flex" onClick={back}>Сохранить</button>

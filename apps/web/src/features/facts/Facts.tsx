@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, FactEntry, Operation, Plan, RoleAccess, RoleKey } from "../../api/client";
 import type { BootstrapLoadMore, BootstrapMutate, ViewState } from "../../domain/types";
-import { calculateOutsource, dateRange, displayEmployeeName, displayOperationName, displaySectionName, numberValue, operationGroups, planPeriod, statusTone, todayRu } from "../../domain/display";
+import { calculateOutsource, dateRange, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal } from "../../components/common";
 
 type FactSide = "factory" | "out";
@@ -29,7 +29,7 @@ function preferredFactSide(role: RoleKey, access: FactAccess): FactSide {
 export function FactsV2({ role, access: permissions, view, setView, data, mutate, loadMore }: { role: RoleKey; access: RoleAccess; view: ViewState; setView: (view: ViewState) => void; data: BootstrapData; mutate: BootstrapMutate; loadMore: BootstrapLoadMore }) {
   const access = factAccessForPermissions(permissions);
   const initialSide = preferredFactSide(role, access);
-  const plans = data.plans.filter((plan) => ["На очереди", "В работе", "Завершен", "Утверждено"].includes(plan.status));
+  const plans = data.plans.filter((plan) => planStatusCode(plan) === "approved");
 
   if (view.type === "facts" && view.planId && view.operationId) {
     return (
@@ -66,7 +66,7 @@ export function FactsV2({ role, access: permissions, view, setView, data, mutate
                 <p className="font-black">План {planPeriod(plan)}</p>
                 <p className="mt-1 text-xs font-black text-slate-600">Временный персонал: {temporaryStaff}</p>
               </div>
-              <p className={`shrink-0 text-xs font-black ${statusTone(plan.status)}`}>{plan.status}</p>
+              <p className={`shrink-0 text-xs font-black ${statusTone(displayPlanStatusForRole(plan, "factory"))}`}>{displayPlanStatusForRole(plan, "factory")}</p>
             </div>
           </button>
         );
@@ -83,8 +83,8 @@ export function FactsV2({ role, access: permissions, view, setView, data, mutate
 
 function FactsEmpty({ access, data }: { access: FactAccess; data: BootstrapData }) {
   const factoryPlans = data.plans.filter((plan) => plan.owner_role === "factory");
-  const waitingHr = factoryPlans.some((plan) => ["Отправлено", "Получено"].includes(plan.status));
-  const waitingOutsourcer = factoryPlans.some((plan) => ["На согласовании", "Не утверждено"].includes(plan.status));
+  const waitingHr = factoryPlans.some((plan) => ["submitted_to_hr", "received_by_outsourcer"].includes(planStatusCode(plan)));
+  const waitingOutsourcer = factoryPlans.some((plan) => ["on_approval", "rejected"].includes(planStatusCode(plan)));
   const roleName = access.factory && access.out ? "мастеров" : access.out ? "мастера аутсорсера" : "мастера фабрики";
 
   if (!factoryPlans.length) {
@@ -138,7 +138,7 @@ function FactPlanViewV2({ planId, plan, data, back, openOperation }: { planId: s
         cells={[
           ["Начало работ", plan?.start_date || "-"],
           ["Окончание работ", plan?.end_date || "-"],
-          ["Статус", plan?.status || "-"]
+          ["Статус", internalPlanStatusLabel(plan)]
         ]}
       />
       {days.map((day, index) => (
