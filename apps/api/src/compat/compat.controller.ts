@@ -1121,7 +1121,7 @@ function requiredActionsForMutation(resource: MutationResource, method: "POST" |
     return actionsForPlanUpdate(body);
   }
   if (resource === "operations") return actionsForOperationMutation(method, body);
-  if (resource === "sections" || resource === "operationCatalog") return ["sections.manage"];
+  if (resource === "sections" || resource === "operationCatalog") return ["admin.users.manage"];
   if (resource === "assignments") return ["plans.out.edit"];
   if (resource === "employees") return ["personnel.edit"];
   if (resource === "reservations" || resource === "housingDorms" || resource === "settings") return ["housing.edit"];
