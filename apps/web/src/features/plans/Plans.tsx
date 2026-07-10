@@ -226,9 +226,11 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
 
 function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean> }) {
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [selectedOperationId, setSelectedOperationId] = useState("");
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+  const selectedOperation = operations.find((operation) => operation.id === selectedOperationId && operation.plan_id === selectedPlanId);
   const selectedEditAccess = selectedPlan ? editAccessForPlan(access, selectedPlan, kind) : undefined;
   const selectedSendKind = selectedPlan && selectedEditAccess ? sendKindForPlan(selectedEditAccess, selectedPlan) : null;
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -319,11 +321,25 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase text-slate-500">Выбранный план</p>
-          <p className="truncate text-sm font-black text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
+          <p className="truncate text-sm font-black text-refDark">{selectedPlan ? `${planPeriod(selectedPlan)}${selectedOperation ? ` · ${displayOperationName(selectedOperation.name)}` : ""}` : "Не выбран"}</p>
         </div>
-        <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
-          <Send size={16} /> Отправить
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <ToolbarAction title="Копировать план" disabled={!selectedPlan || !access.factory} onClick={() => selectedPlan && copyPlan(selectedPlan)}>
+            <Copy size={16} /> Копировать
+          </ToolbarAction>
+          <ToolbarAction title="Отправить план" primary disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
+            <Send size={16} /> Отправить
+          </ToolbarAction>
+          <ToolbarAction title="Добавить строку" disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={() => selectedPlan && createOperation(selectedPlan)}>
+            <Plus size={16} /> Добавить
+          </ToolbarAction>
+          <ToolbarAction title="Дублировать строку" disabled={!selectedPlan || !selectedOperation || !selectedEditAccess?.factory} onClick={() => selectedPlan && selectedOperation && createOperation(selectedPlan, selectedOperation)}>
+            <CopyPlus size={16} /> Дублировать
+          </ToolbarAction>
+          <ToolbarAction title="Удалить строку" danger disabled={!selectedPlan || !selectedOperation || !selectedEditAccess?.factory} onClick={() => selectedPlan && selectedOperation && removeOperation(selectedPlan, selectedOperation)}>
+            <Trash2 size={16} /> Удалить
+          </ToolbarAction>
+        </div>
       </div>
       <div className="overflow-auto">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
@@ -347,7 +363,14 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const displayStatus = displayPlanStatus(plan, kind, access);
             const planRows = rows.length ? rows : [undefined];
             return planRows.map((operation, index) => (
-              <tr key={`${plan.id}-${operation?.id || "empty"}`} className={`border-t border-slate-200 hover:bg-emerald-50/30 ${selectedPlanId === plan.id ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`} onClick={() => setSelectedPlanId(plan.id)}>
+              <tr
+                key={`${plan.id}-${operation?.id || "empty"}`}
+                className={`border-t border-slate-200 hover:bg-emerald-50/30 ${selectedPlanId === plan.id && (!operation || selectedOperationId === operation.id) ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`}
+                onClick={() => {
+                  setSelectedPlanId(plan.id);
+                  setSelectedOperationId(operation?.id || "");
+                }}
+              >
                 <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
@@ -357,12 +380,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
                 <Td>
-                  <div className="flex justify-center gap-1">
-                    {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
-                    {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
-                    {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><CopyPlus size={15} /></IconAction>}
-                    {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(plan, operation)}><Trash2 size={15} /></IconAction>}
-                  </div>
+                  {selectedPlanId === plan.id && operation && selectedOperationId === operation.id ? <span className="text-xs font-black text-refGreen">Выбрано</span> : ""}
                 </Td>
               </tr>
             ));
@@ -433,9 +451,14 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
   );
 }
 
-function IconAction({ children, title, danger, onClick }: { children: ReactNode; title: string; danger?: boolean; onClick: () => void }) {
+function ToolbarAction({ children, title, primary, danger, disabled, onClick }: { children: ReactNode; title: string; primary?: boolean; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+  const tone = danger
+    ? "bg-red-50 text-red-600 hover:bg-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+    : primary
+      ? "bg-refGreen text-white hover:bg-emerald-800 disabled:bg-slate-300 disabled:text-white"
+      : "bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:text-slate-400";
   return (
-    <button className={`flex h-7 w-7 items-center justify-center rounded transition ${danger ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-slate-100 text-refGreen hover:bg-emerald-50"}`} type="button" title={title} onClick={onClick}>
+    <button className={`inline-flex h-9 items-center justify-center gap-2 rounded-md px-3 text-sm font-black transition disabled:cursor-not-allowed ${tone}`} type="button" title={title} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );
