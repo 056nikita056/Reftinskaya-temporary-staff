@@ -67,11 +67,11 @@ function primaryKind(access: PlanAccess, fallbackRole: RoleKey): PlanKind {
   return "factory";
 }
 
-function editAccessForPlan(access: PlanAccess, plan: Plan): PlanEditAccess {
+function editAccessForPlan(access: PlanAccess, plan: Plan, kind: PlanKind): PlanEditAccess {
   return {
     factory: access.factory && plan.status === "В доработке",
-    hr: access.hr && (canEditPlan("hr", plan) || (access.factory && plan.status === "В доработке")),
-    out: access.out && canEditPlan("out", plan)
+    hr: access.hr && (kind === "hr" ? canEditPlan("hr", plan) : access.factory && plan.status === "В доработке"),
+    out: access.out && kind === "out" && canEditPlan("out", plan)
   };
 }
 
@@ -87,7 +87,6 @@ function sendKindForPlan(access: PlanEditAccess, plan: Plan): PlanKind | null {
 }
 
 function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
-  if (kind === "hr" && plan.status === "Отправлено") return "Получено";
   return plan.status;
 }
 
@@ -120,7 +119,7 @@ function missingSectionRows(rows: Operation[]) {
 }
 
 function missingOperationRows(rows: Operation[]) {
-  return rows.filter((row) => !row.operation_id);
+  return rows.filter((row) => !row.operation_id && !row.name.trim());
 }
 
 function isDraftOperation(row: Operation) {
@@ -151,7 +150,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   }
 
   if (creatingPlan && access.factory) {
-    return <NewPlanDetail data={data} mutate={mutate} back={() => setCreatingPlan(false)} />;
+    return <NewPlanDetail access={access} data={data} mutate={mutate} back={() => setCreatingPlan(false)} />;
   }
 
   return (
@@ -182,7 +181,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function NewPlanDetail({ data, mutate, back }: { data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
+function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
   const [initialDraft] = useState(createNewPlanDraft);
   const [dates, setDates] = useState(initialDraft.dates);
   const [drafts, setDrafts] = useState(initialDraft.operations);
@@ -201,6 +200,11 @@ function NewPlanDetail({ data, mutate, back }: { data: BootstrapData; mutate: Bo
     required_staff: requiredStaff,
     staff_count: staffCount,
     outsource_count: calculateOutsource(requiredStaff, staffCount)
+  };
+  const editAccess: PlanEditAccess = {
+    factory: access.factory,
+    hr: access.hr,
+    out: false
   };
 
   const cancel = async () => {
@@ -248,10 +252,12 @@ function NewPlanDetail({ data, mutate, back }: { data: BootstrapData; mutate: Bo
       <PlanFlowNotice kind="factory" plan={plan} />
       <PlanEditor
         kind="factory"
+        editAccess={editAccess}
         sections={data.sections || []}
         operationCatalog={data.operationCatalog || []}
         drafts={drafts}
         setDrafts={setDrafts}
+        onRemoveOperation={(row) => setDrafts(drafts.filter((draft) => draft.id !== row.id))}
         onAddOperation={() => setDrafts([...drafts, createDraftOperation(drafts.length + 1)])}
       />
       <div className="mt-2 flex items-center justify-end gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
@@ -320,11 +326,10 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   }, [planId, data.operations.length]);
 
   if (!plan) return <Empty text="План не найден" />;
-  const editAccess = editAccessForPlan(access, plan);
+  const editAccess = editAccessForPlan(access, plan, kind);
   const editable = hasEditAccess(editAccess);
   const isEdit = Boolean(edit && editable);
   const sendKind = sendKindForPlan(editAccess, plan);
-  const sendDirectlyToOutsource = plan.status === "В доработке" && Boolean(editAccess.factory && editAccess.hr);
 
   const save = async () => {
     if (editAccess.factory && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
@@ -346,6 +351,22 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         ...(editAccess.out ? { hours_per_day: numberValue(row.hours_per_day, 8), rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
       }, "Сохранено");
     }
+  };
+  const removeOperation = async (row: Operation) => {
+    if (isDraftOperation(row)) {
+      setDrafts(drafts.filter((draft) => draft.id !== row.id));
+      return;
+    }
+    const ok = await confirm({
+      title: "Удалить операцию?",
+      message: `${displaySectionName(row.section_name)} / ${displayOperationName(row.name)}`,
+      confirmLabel: "Удалить",
+      cancelLabel: "Отменить",
+      tone: "warning"
+    });
+    if (!ok) return;
+    await mutate(`/operations/${row.id}`, "DELETE", undefined, "Операция удалена");
+    setDrafts(drafts.filter((draft) => draft.id !== row.id));
   };
 
   const send = async () => {
@@ -382,11 +403,11 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         return;
       }
     }
-    const question = sendDirectlyToOutsource ? "Отправить план Аутсорсеру?" : sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
+    const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план Аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     await save();
-    const status = sendDirectlyToOutsource ? "Получено" : sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
-    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendDirectlyToOutsource ? "План отправлен аутсорсеру" : sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    const status = sendKind === "factory" ? "Отправлено" : sendKind === "hr" ? "Получено" : "На согласовании";
+    await mutate(`/plans/${plan.id}`, "PUT", { status }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
     back();
   };
 
@@ -423,7 +444,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       <PlanFlowNotice kind={kind} plan={plan} />
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-black text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
-        <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} operationCatalog={data.operationCatalog || []} drafts={drafts} setDrafts={setDrafts} planId={plan.id} />
+        <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} operationCatalog={data.operationCatalog || []} drafts={drafts} setDrafts={setDrafts} planId={plan.id} onRemoveOperation={removeOperation} />
       ) : (
         <PlanTable kind={access.out ? "out" : kind} editAccess={{ factory: false, hr: false, out: access.out }} operations={operations} openOperation={openOperation} assignments={data.assignments} employees={data.employees} />
       )}
@@ -603,7 +624,7 @@ function PersonnelPicker({ data, assignedIds, period, select, close }: { data: B
   );
 }
 
-function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], drafts, setDrafts, planId, onAddOperation }: { kind: PlanKind; editAccess?: PlanEditAccess; sections?: Section[]; operationCatalog?: BootstrapData["operationCatalog"]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; planId?: string; onAddOperation?: () => void }) {
+function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], drafts, setDrafts, planId, onAddOperation, onRemoveOperation }: { kind: PlanKind; editAccess?: PlanEditAccess; sections?: Section[]; operationCatalog?: BootstrapData["operationCatalog"]; drafts: Operation[]; setDrafts: (rows: Operation[]) => void; planId?: string; onAddOperation?: () => void; onRemoveOperation?: (row: Operation) => void }) {
   const update = (id: string, patch: Partial<Operation>) => setDrafts(drafts.map((row) => row.id === id ? { ...row, ...patch } : row));
   const addOperation = () => {
     if (onAddOperation) {
@@ -614,7 +635,7 @@ function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], dr
   };
   return (
     <div className="space-y-3">
-      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} />)}
+      {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} onRemove={(editAccess?.factory ?? kind === "factory") ? () => onRemoveOperation?.(row) : undefined} />)}
       {(editAccess?.factory ?? kind === "factory") && (
         <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-black text-white" onClick={addOperation}>
           <Plus size={16} className="inline" /> Операция

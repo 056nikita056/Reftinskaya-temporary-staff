@@ -175,7 +175,7 @@ export class CompatController {
     await this.hydrateStore(user.factoryId, store);
     const roles = await this.requireCurrentRoles(user.sub);
     requireMutationAccess(roles, resource, "PUT", body, store);
-    if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles);
+    if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles, user.role);
     if (resource === "sections") return this.updateSection(user.factoryId, id, body);
     if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
     if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body, roles);
@@ -261,7 +261,7 @@ export class CompatController {
       }),
       this.prisma.territoryTree.findMany({
         where: { factoryId },
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ parentId: "asc" }, { name: "asc" }],
         include: {
           _count: {
             select: { planOperations: true }
@@ -269,7 +269,7 @@ export class CompatController {
         }
       }),
       this.prisma.operation.findMany({
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ parentId: "asc" }, { name: "asc" }],
         include: {
           _count: {
             select: { planOperations: true }
@@ -375,14 +375,14 @@ export class CompatController {
     };
   }
 
-  private async updatePlan(factoryId: string, id: string, body: Record<string, unknown>, roles: UserRole[]): Promise<MutationDelta> {
+  private async updatePlan(factoryId: string, id: string, body: Record<string, unknown>, roles: UserRole[], activeRole: UserRole): Promise<MutationDelta> {
     const existing = await this.requirePlanWithStatus(factoryId, id);
     const data: Record<string, unknown> = {};
     if ("start_date" in body) data.startDate = parseApiDate(requiredString(body.start_date, "START_DATE_REQUIRED"));
     if ("end_date" in body) data.endDate = parseApiDate(requiredString(body.end_date, "END_DATE_REQUIRED"));
     if ("status" in body) {
       const nextStatus = await this.requireStatusByTitle(requiredString(body.status, "STATUS_REQUIRED"));
-      assertPlanStatusTransition(existing.status, nextStatus, roles);
+      assertPlanStatusTransition(existing.status, nextStatus, roles, activeRole);
       data.statusId = nextStatus.id;
     }
     const plan = await this.prisma.plan.update({
@@ -449,10 +449,7 @@ export class CompatController {
       data.territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
       await this.requireActiveSection(factoryId, data.territoryId as string);
     }
-    if ("operation_id" in body) {
-      data.operationId = requiredString(body.operation_id, "OPERATION_REQUIRED");
-      await this.requireActiveOperationCatalogItem(data.operationId as string);
-    }
+    if ("operation_id" in body || "name" in body) data.operationId = await this.resolveOperationId(body);
     if ("required_staff" in body) data.requiredCount = numberValue(body.required_staff, 1);
     if ("staff_count" in body) data.staffCount = numberValue(body.staff_count, 0);
     if ("outsource_count" in body) data.outsourcingCount = numberValue(body.outsource_count, 0);
@@ -487,12 +484,15 @@ export class CompatController {
   }
 
   private async createSection(factoryId: string, body: Record<string, unknown>): Promise<MutationDelta> {
+    const parentId = stringValue(body.parent_id);
+    if (parentId) await this.requireActiveParentSection(factoryId, parentId);
     const created = await this.prisma.territoryTree.create({
       data: {
         id: stringValue(body.id) ?? randomUUID(),
         factoryId,
+        parentId: parentId ?? null,
         name: requiredString(body.name, "TERRITORY_NAME_REQUIRED"),
-        isFolder: false,
+        isFolder: typeof body.is_folder === "boolean" ? body.is_folder : false,
         active: body.active === undefined ? true : Boolean(body.active)
       },
       include: {
@@ -511,11 +511,27 @@ export class CompatController {
   }
 
   private async updateSection(factoryId: string, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
-    await this.requireSection(factoryId, id);
+    const existing = await this.requireSection(factoryId, id);
+    const parentId = "parent_id" in body ? stringValue(body.parent_id) ?? null : undefined;
+    if (parentId) {
+      if (parentId === id) {
+        throw new BadRequestException({ code: "INVALID_PARENT", message: "Элемент не может быть родителем самому себе" });
+      }
+      await this.requireActiveParentSection(factoryId, parentId);
+      await this.assertSectionParentDoesNotCreateCycle(factoryId, id, parentId);
+    }
+    if (body.is_folder === true && existing.isFolder === false) {
+      const used = await this.prisma.planOperation.count({ where: { territoryId: id } });
+      if (used > 0) {
+        throw new BadRequestException({ code: "SECTION_USED_AS_ELEMENT", message: "Используемый в планах участок нельзя сделать папкой" });
+      }
+    }
     const updated = await this.prisma.territoryTree.update({
       where: { id },
       data: {
         ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
+        ...(parentId !== undefined ? { parentId } : {}),
+        ...(typeof body.is_folder === "boolean" ? { isFolder: body.is_folder } : {}),
         ...(typeof body.active === "boolean" ? { active: body.active } : {})
       },
       include: {
@@ -535,6 +551,13 @@ export class CompatController {
 
   private async deleteSection(factoryId: string, id: string): Promise<MutationDelta> {
     await this.requireSection(factoryId, id);
+    const childCount = await this.prisma.territoryTree.count({ where: { factoryId, parentId: id } });
+    if (childCount > 0) {
+      throw new BadRequestException({
+        code: "SECTION_HAS_CHILDREN",
+        message: "Сначала удалите или перенесите дочерние элементы"
+      });
+    }
     const used = await this.prisma.planOperation.count({ where: { territoryId: id } });
     if (used > 0) {
       const updated = await this.prisma.territoryTree.update({
@@ -564,10 +587,17 @@ export class CompatController {
   }
 
   private async createOperationCatalogItem(body: Record<string, unknown>): Promise<MutationDelta> {
+    const parentId = stringValue(body.parent_id);
+    const parent = parentId ? await this.requireActiveParentOperationCatalogItem(parentId) : null;
+    const sectionId = stringValue(body.section_id) ?? parent?.sectionId ?? null;
+    if (sectionId) await this.requireActiveSectionForCatalog(sectionId);
     const created = await this.prisma.operation.create({
       data: {
         id: stringValue(body.id) ?? randomUUID(),
+        parentId: parentId ?? null,
+        sectionId,
         name: requiredString(body.name, "OPERATION_NAME_REQUIRED"),
+        isFolder: typeof body.is_folder === "boolean" ? body.is_folder : false,
         active: body.active === undefined ? true : Boolean(body.active)
       },
       include: {
@@ -586,11 +616,32 @@ export class CompatController {
   }
 
   private async updateOperationCatalogItem(id: string, body: Record<string, unknown>): Promise<MutationDelta> {
-    await this.requireOperationCatalogItem(id);
+    const existing = await this.requireOperationCatalogItem(id);
+    const parentId = "parent_id" in body ? stringValue(body.parent_id) ?? null : undefined;
+    let parentSectionId: string | null | undefined;
+    if (parentId) {
+      if (parentId === id) {
+        throw new BadRequestException({ code: "INVALID_PARENT", message: "Элемент не может быть родителем самому себе" });
+      }
+      const parent = await this.requireActiveParentOperationCatalogItem(parentId);
+      parentSectionId = parent.sectionId;
+      await this.assertOperationParentDoesNotCreateCycle(id, parentId);
+    }
+    const sectionId = "section_id" in body ? stringValue(body.section_id) ?? null : parentSectionId;
+    if (sectionId) await this.requireActiveSectionForCatalog(sectionId);
+    if (body.is_folder === true && existing.isFolder === false) {
+      const used = await this.prisma.planOperation.count({ where: { operationId: id } });
+      if (used > 0) {
+        throw new BadRequestException({ code: "OPERATION_USED_AS_ELEMENT", message: "Используемую в планах операцию нельзя сделать папкой" });
+      }
+    }
     const updated = await this.prisma.operation.update({
       where: { id },
       data: {
         ...(typeof body.name === "string" ? { name: body.name.trim() } : {}),
+        ...(parentId !== undefined ? { parentId } : {}),
+        ...(sectionId !== undefined ? { sectionId } : {}),
+        ...(typeof body.is_folder === "boolean" ? { isFolder: body.is_folder } : {}),
         ...(typeof body.active === "boolean" ? { active: body.active } : {})
       },
       include: {
@@ -610,6 +661,13 @@ export class CompatController {
 
   private async deleteOperationCatalogItem(id: string): Promise<MutationDelta> {
     const operation = await this.requireOperationCatalogItem(id);
+    const childCount = await this.prisma.operation.count({ where: { parentId: id } });
+    if (childCount > 0) {
+      throw new BadRequestException({
+        code: "OPERATION_HAS_CHILDREN",
+        message: "Сначала удалите или перенесите дочерние элементы"
+      });
+    }
     const used = await this.prisma.planOperation.count({ where: { operationId: id } });
     if (used > 0) {
       const updated = await this.prisma.operation.update({
@@ -654,9 +712,30 @@ export class CompatController {
   }
 
   private async resolveOperationId(body: Record<string, unknown>): Promise<string> {
-    const operationId = requiredString(body.operation_id, "OPERATION_REQUIRED");
-    await this.requireActiveOperationCatalogItem(operationId);
-    return operationId;
+    const operationId = stringValue(body.operation_id);
+    if (operationId) {
+      await this.requireActiveOperationCatalogItem(operationId);
+      return operationId;
+    }
+    const name = requiredString(body.name, "OPERATION_REQUIRED");
+    const sectionId = stringValue(body.section_id);
+    const existing = await this.prisma.operation.findFirst({
+      where: {
+        name,
+        sectionId: sectionId ?? null,
+        active: true
+      }
+    });
+    if (existing) return existing.id;
+    const created = await this.prisma.operation.create({
+      data: {
+        name,
+        sectionId: sectionId ?? null,
+        active: true,
+        isFolder: false
+      }
+    });
+    return created.id;
   }
 
   private async requireStatusByCode(code: string) {
@@ -740,6 +819,28 @@ export class CompatController {
     return section;
   }
 
+  private async requireActiveParentSection(factoryId: string, id: string) {
+    const section = await this.requireSection(factoryId, id);
+    if (!section.active) {
+      throw new BadRequestException({
+        code: "INVALID_PARENT_SECTION",
+        message: "Родителем может быть только активный элемент справочника"
+      });
+    }
+    return section;
+  }
+
+  private async assertSectionParentDoesNotCreateCycle(factoryId: string, id: string, parentId: string): Promise<void> {
+    let cursor: string | null = parentId;
+    for (let depth = 0; cursor && depth < 256; depth += 1) {
+      if (cursor === id) {
+        throw new BadRequestException({ code: "HIERARCHY_CYCLE", message: "Нельзя перенести элемент внутрь собственного потомка" });
+      }
+      const parent: { parentId: string | null } | null = await this.prisma.territoryTree.findFirst({ where: { id: cursor, factoryId }, select: { parentId: true } });
+      cursor = parent?.parentId ?? null;
+    }
+  }
+
   private async requireOperationCatalogItem(id: string) {
     const operation = await this.prisma.operation.findUnique({ where: { id } });
     if (!operation) throwNotFound("operationCatalog", id);
@@ -755,6 +856,50 @@ export class CompatController {
       });
     }
     return operation;
+  }
+
+  private async requireActiveParentOperationCatalogItem(id: string) {
+    const operation = await this.requireOperationCatalogItem(id);
+    if (!operation.active) {
+      throw new BadRequestException({
+        code: "INVALID_PARENT_OPERATION",
+        message: "Родителем может быть только активный элемент справочника"
+      });
+    }
+    return operation;
+  }
+
+  private async requireActiveSectionForCatalog(id: string) {
+    const section = await this.requireSectionForAnyFactory(id);
+    if (!section.active) {
+      throw new BadRequestException({
+        code: "INACTIVE_PARENT_SECTION",
+        message: "Операцию можно привязать только к активному узлу структуры"
+      });
+    }
+    return section;
+  }
+
+  private async requireSectionForAnyFactory(id: string) {
+    const section = await this.prisma.territoryTree.findUnique({ where: { id } });
+    if (!section) {
+      throw new BadRequestException({
+        code: "SECTION_NOT_FOUND",
+        message: "Узел структуры не найден"
+      });
+    }
+    return section;
+  }
+
+  private async assertOperationParentDoesNotCreateCycle(id: string, parentId: string): Promise<void> {
+    let cursor: string | null = parentId;
+    for (let depth = 0; cursor && depth < 256; depth += 1) {
+      if (cursor === id) {
+        throw new BadRequestException({ code: "HIERARCHY_CYCLE", message: "Нельзя перенести элемент внутрь собственного потомка" });
+      }
+      const parent: { parentId: string | null } | null = await this.prisma.operation.findUnique({ where: { id: cursor }, select: { parentId: true } });
+      cursor = parent?.parentId ?? null;
+    }
   }
 
   private async requireCurrentRoles(userId: string): Promise<UserRole[]> {
@@ -1004,7 +1149,7 @@ function actionsForPlanUpdate(body: Record<string, unknown>): AccessAction[] {
   return [...actions];
 }
 
-function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }, roles: UserRole[] = []): void {
+function assertPlanStatusTransition(current: { code: string; title: string }, next: { code: string; title: string }, roles: UserRole[] = [], activeRole?: UserRole): void {
   if (current.code === next.code) return;
   const allowed: Record<string, string[]> = {
     draft: ["submitted_to_hr"],
@@ -1014,21 +1159,30 @@ function assertPlanStatusTransition(current: { code: string; title: string }, ne
     on_approval: ["approved", "rejected"],
     approved: []
   };
-  const permissions = accessForRoles(roles);
-  if (
-    current.code === "draft" &&
-    next.code === "received_by_outsourcer" &&
-    permissions.actions.includes("plans.factory.edit") &&
-    permissions.actions.includes("plans.hr.edit")
-  ) {
-    return;
-  }
   if (!allowed[current.code]?.includes(next.code)) {
     throw new BadRequestException({
       code: "INVALID_PLAN_STATUS_TRANSITION",
       message: `Недопустимый переход статуса плана: ${current.title} -> ${next.title}`
     });
   }
+  const requiredAction = actionForStatusTransition(next.code);
+  if (requiredAction && activeRole && !accessForRole(activeRole).actions.includes(requiredAction)) {
+    throw new ForbiddenException({
+      code: "FORBIDDEN_ACTIVE_ROLE",
+      message: "Активная роль не может выполнить этот переход статуса",
+      activeRole,
+      requiredAction
+    });
+  }
+}
+
+function actionForStatusTransition(nextStatusCode: string): AccessAction | null {
+  if (nextStatusCode === "submitted_to_hr") return "plans.factory.edit";
+  if (nextStatusCode === "received_by_outsourcer") return "plans.hr.edit";
+  if (nextStatusCode === "on_approval") return "plans.out.edit";
+  if (nextStatusCode === "approved" || nextStatusCode === "rejected") return "plans.out.approve";
+  if (nextStatusCode === "draft") return "plans.factory.edit";
+  return null;
 }
 
 function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>, status: { code: string; title: string }, roles: UserRole[] = []): void {
@@ -1201,21 +1355,26 @@ function mapPlanOperation(row: {
   };
 }
 
-function mapSection(section: { id: string; factoryId: string; name: string; active: boolean; _count?: { planOperations: number } }, index: number) {
+function mapSection(section: { id: string; factoryId: string; parentId: string | null; name: string; isFolder: boolean | null; active: boolean; _count?: { planOperations: number } }, index: number) {
   return {
     id: section.id,
     factory_id: section.factoryId,
+    parent_id: section.parentId,
     name: section.name,
     order: index + 1,
+    is_folder: Boolean(section.isFolder),
     active: section.active,
     operation_count: section._count?.planOperations ?? 0
   };
 }
 
-function mapOperationCatalogItem(operation: { id: string; name: string; active: boolean; _count?: { planOperations: number } }) {
+function mapOperationCatalogItem(operation: { id: string; parentId: string | null; sectionId: string | null; name: string; isFolder: boolean; active: boolean; _count?: { planOperations: number } }) {
   return {
     id: operation.id,
+    parent_id: operation.parentId,
+    section_id: operation.sectionId,
     name: operation.name,
+    is_folder: operation.isFolder,
     active: operation.active,
     operation_count: operation._count?.planOperations ?? 0
   };

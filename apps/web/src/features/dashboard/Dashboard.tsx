@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { CalendarDays, Check, ClipboardList, Hotel, Users } from "lucide-react";
-import type { BootstrapData, RoleAccess } from "../../api/client";
+import type { BootstrapData } from "../../api/client";
 import { Panel } from "../../components/common";
 import { statusTone } from "../../domain/display";
 
-export function Dashboard({ data, access }: { data: BootstrapData; access?: RoleAccess }) {
+export function Dashboard({ data }: { data: BootstrapData }) {
   const activePlans = data.plans.filter((plan) => !["Завершен", "Отменено"].includes(plan.status)).length;
   const activeFacts = data.facts.filter((fact) => fact.operation_done || fact.start_done || fact.end_done).length;
-  const planStatuses = data.plans.map((plan) => displayStatusForAccess(plan.status, access));
+  const planStatuses = data.plans.map((plan) => plan.status);
   const statusCounts = Array.from(new Map(planStatuses.map((status) => [status, planStatuses.filter((item) => item === status).length])));
   return (
     <div className="space-y-4">
@@ -33,13 +33,6 @@ export function Dashboard({ data, access }: { data: BootstrapData; access?: Role
       </Panel>
     </div>
   );
-}
-
-function displayStatusForAccess(status: string, access?: RoleAccess) {
-  const actions = access?.actions || [];
-  const isHrView = actions.includes("plans.hr.edit") && !actions.includes("plans.factory.edit");
-  if (isHrView && status === "Отправлено") return "Получено";
-  return status;
 }
 
 function Metric({ label, value, icon }: { label: string; value: number | string; icon: ReactNode }) {

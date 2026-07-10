@@ -1,7 +1,9 @@
+import { Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { Operation, OperationCatalogItem, Section } from "../../api/client";
 import type { PlanKind } from "../../domain/types";
 import { calculateOutsource, displayOperationName, displaySectionName, numberValue } from "../../domain/display";
+import { Modal } from "../../components/common";
 
 export type PlanEditAccess = {
   factory: boolean;
@@ -9,8 +11,8 @@ export type PlanEditAccess = {
   out: boolean;
 };
 
-export function PlanOperationCard({ kind, row, sections = [], operationCatalog = [], assigned = [], edit, editAccess, onChange, onOpen }: { kind: PlanKind; row: Operation; sections?: Section[]; operationCatalog?: OperationCatalogItem[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onOpen?: () => void }) {
-  const [sectionQuery, setSectionQuery] = useState("");
+export function PlanOperationCard({ kind, row, sections = [], operationCatalog = [], assigned = [], edit, editAccess, onChange, onOpen, onRemove }: { kind: PlanKind; row: Operation; sections?: Section[]; operationCatalog?: OperationCatalogItem[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onOpen?: () => void; onRemove?: () => void }) {
+  const [picker, setPicker] = useState<"section" | "operation" | null>(null);
   const required = numberValue(row.required_staff);
   const staff = numberValue(row.staff_count);
   const outsource = calculateOutsource(required, staff);
@@ -20,24 +22,31 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
   const canOpen = (kind === "out" || Boolean(editAccess?.out)) && !edit && Boolean(onOpen);
   const assignedText = assigned.length ? assigned.join(", ") : "";
   const update = (patch: Partial<Operation>) => onChange?.(patch);
-  const normalizedSectionQuery = sectionQuery.trim();
-  const selectableSections = sections.filter((section) => section.active || section.id === row.section_id);
-  const visibleSections = selectableSections.filter((section) => section.name.toLowerCase().includes(normalizedSectionQuery.toLowerCase()));
-  const selectableOperations = operationCatalog.filter((operation) => operation.active || operation.id === row.operation_id);
+  const sectionTree = buildSectionTree(sections, operationCatalog);
+  const operationTree = buildOperationTree(sections, operationCatalog, row.section_id);
   const selectSection = (sectionId: string) => {
     const section = sections.find((item) => item.id === sectionId);
+    const currentOperation = operationCatalog.find((item) => item.id === row.operation_id);
+    const keepOperation = !currentOperation?.section_id || currentOperation.section_id === sectionId;
     update({
       section_id: section?.id || undefined,
       section_name: section?.name || "",
-      section_order: section?.order ?? row.section_order
+      section_order: section?.order ?? row.section_order,
+      ...(keepOperation ? {} : { operation_id: undefined, name: "" })
     });
+    setPicker(null);
   };
-  const selectOperation = (operationId: string) => {
-    const operation = operationCatalog.find((item) => item.id === operationId);
+  const selectOperation = (nodeKey: string) => {
+    const node = operationTree.find((item) => item.key === nodeKey);
+    if (!node) return;
+    const operation = node.source === "operation" ? operationCatalog.find((item) => item.id === node.id) : undefined;
+    const section = operation?.section_id ? sections.find((item) => item.id === operation.section_id) : undefined;
     update({
-      operation_id: operation?.id || undefined,
-      name: operation?.name || ""
+      operation_id: operation?.id,
+      ...(section ? { section_id: section.id, section_name: section.name, section_order: section.order } : {}),
+      name: node.name
     });
+    setPicker(null);
   };
   const open = () => {
     if (canOpen) onOpen?.();
@@ -58,35 +67,20 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
     >
       <div className="mb-2">
         {canEditFactory ? (
-          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
-            <div className="grid min-w-0 gap-1">
-              <input
-                className="h-8 min-w-0 rounded bg-slate-100 px-2 text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
-                value={sectionQuery}
-                placeholder="Поиск участка"
-                onChange={(event) => setSectionQuery(event.target.value)}
-              />
-              <select
-                className="h-8 min-w-0 rounded bg-slate-100 px-2 text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
-                value={row.section_id || ""}
-                onChange={(event) => selectSection(event.target.value)}
-              >
-                <option value="">Участок</option>
-                {visibleSections.map((section) => (
-                  <option key={section.id} value={section.id}>{section.name}</option>
-                ))}
-              </select>
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
+              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-[11px] font-black text-slate-700 outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("section")}>
+                {row.section_id ? displaySectionName(row.section_name) : "Участок"}
+              </button>
+              <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("operation")}>
+                {row.name ? displayOperationName(row.name) : "Операция"}
+              </button>
             </div>
-            <select
-              className="h-8 min-w-0 rounded bg-slate-100 px-2 text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition focus:bg-white focus:ring-2 focus:ring-refGreen/30"
-              value={row.operation_id || ""}
-              onChange={(event) => selectOperation(event.target.value)}
-            >
-              <option value="">Операция</option>
-              {selectableOperations.map((operation) => (
-                <option key={operation.id} value={operation.id}>{operation.name}</option>
-              ))}
-            </select>
+            {onRemove && (
+              <button className="flex h-8 w-8 items-center justify-center rounded bg-red-50 text-red-600 transition hover:bg-red-100" type="button" title="Удалить операцию" onClick={onRemove}>
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2">
@@ -132,8 +126,178 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           {canOpen && <p className="mt-2 text-right text-[11px] font-black text-refGreen">Открыть распределение</p>}
         </div>
       )}
+      {picker === "section" && (
+        <CatalogPicker
+          title="Выбор участка"
+          emptyText="Нет элементов с дочерними элементами."
+          entries={sectionTree}
+          selectedId={row.section_id ? `section:${row.section_id}` : ""}
+          selectable={(entry) => entry.childCount > 0}
+          onSelect={(entry) => selectSection(entry.id)}
+          close={() => setPicker(null)}
+        />
+      )}
+      {picker === "operation" && (
+        <CatalogPicker
+          title="Выбор операции"
+          emptyText="Нет конечных элементов для выбранного участка."
+          entries={operationTree}
+          selectedId={row.operation_id ? `operation:${row.operation_id}` : ""}
+          selectable={(entry) => entry.childCount === 0}
+          onSelect={(entry) => selectOperation(entry.key)}
+          close={() => setPicker(null)}
+        />
+      )}
     </div>
   );
+}
+
+type PickerEntry = {
+  id: string;
+  key: string;
+  source: "section" | "operation";
+  parentId: string;
+  name: string;
+  active: boolean;
+  depth: number;
+  childCount: number;
+};
+
+function CatalogPicker({ title, emptyText, entries, selectedId, selectable, onSelect, close }: { title: string; emptyText: string; entries: PickerEntry[]; selectedId: string; selectable: (entry: PickerEntry) => boolean; onSelect: (entry: PickerEntry) => void; close: () => void }) {
+  const visibleEntries = entries.filter((entry) => entry.active);
+  return (
+    <Modal title={title} close={close}>
+      <div className="max-h-[55vh] overflow-auto rounded-md border border-slate-200">
+        {visibleEntries.map((entry) => {
+          const canSelect = selectable(entry);
+          return (
+            <button
+              key={entry.key}
+              className={`flex min-h-10 w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 ${selectedId === entry.key ? "bg-emerald-50 text-refGreen" : canSelect ? "bg-white hover:bg-slate-50" : "cursor-not-allowed bg-slate-50 text-slate-400"}`}
+              disabled={!canSelect}
+              type="button"
+              onClick={() => onSelect(entry)}
+            >
+              <span className="min-w-0 truncate font-black" style={{ paddingLeft: `${entry.depth * 18}px` }}>{entry.name}</span>
+              {entry.childCount > 0 && <span className="shrink-0 text-[11px] font-bold text-slate-400">+{entry.childCount}</span>}
+            </button>
+          );
+        })}
+        {!visibleEntries.length && <p className="p-4 text-sm font-bold text-slate-500">{emptyText}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+function buildSectionTree(sections: Section[], operations: OperationCatalogItem[]): PickerEntry[] {
+  const childCounts = new Map<string, number>();
+  for (const section of sections) {
+    if (section.parent_id) childCounts.set(section.parent_id, (childCounts.get(section.parent_id) || 0) + 1);
+  }
+  for (const operation of operations) {
+    if (operation.section_id) childCounts.set(operation.section_id, (childCounts.get(operation.section_id) || 0) + 1);
+  }
+  return buildTreeEntries(
+    sections.map((section) => ({
+      id: section.id,
+      key: `section:${section.id}`,
+      source: "section" as const,
+      parentId: section.parent_id ? `section:${section.parent_id}` : "",
+      name: section.name,
+      active: section.active,
+      childCount: childCounts.get(section.id) || 0
+    }))
+  );
+}
+
+function buildOperationTree(sections: Section[], operations: OperationCatalogItem[], sectionId?: string | null): PickerEntry[] {
+  const descendantSectionIds = sectionId ? descendantIds(sections, sectionId) : new Set(sections.map((section) => section.id));
+  if (sectionId) descendantSectionIds.add(sectionId);
+  const sectionNodes = sections.filter((section) => !sectionId || descendantSectionIds.has(section.id)).map((section) => ({
+    id: section.id,
+    key: `section:${section.id}`,
+    source: "section" as const,
+    parentId: section.parent_id && (!sectionId || descendantSectionIds.has(section.parent_id)) ? `section:${section.parent_id}` : "",
+    name: section.name,
+    active: section.active,
+    childCount: 0
+  }));
+  const allowed = operations.filter((operation) => !sectionId || !operation.section_id || descendantSectionIds.has(operation.section_id));
+  const allowedIds = new Set(allowed.map((operation) => operation.id));
+  const sectionNodeIds = new Set(sectionNodes.map((section) => section.id));
+  const childCounts = new Map<string, number>();
+  for (const section of sectionNodes) {
+    if (section.parentId.startsWith("section:")) {
+      const parentId = section.parentId.slice("section:".length);
+      childCounts.set(`section:${parentId}`, (childCounts.get(`section:${parentId}`) || 0) + 1);
+    }
+  }
+  for (const operation of allowed) {
+    const parentKey = operation.parent_id && allowedIds.has(operation.parent_id)
+      ? `operation:${operation.parent_id}`
+      : operation.section_id && sectionNodeIds.has(operation.section_id)
+        ? `section:${operation.section_id}`
+        : "";
+    if (parentKey) childCounts.set(parentKey, (childCounts.get(parentKey) || 0) + 1);
+  }
+  return buildTreeEntries(
+    [
+      ...sectionNodes.map((section) => ({ ...section, childCount: childCounts.get(section.key) || 0 })),
+      ...allowed.map((operation) => {
+        const parentId = operation.parent_id && allowedIds.has(operation.parent_id)
+          ? `operation:${operation.parent_id}`
+          : operation.section_id && sectionNodeIds.has(operation.section_id)
+            ? `section:${operation.section_id}`
+            : "";
+        return {
+          id: operation.id,
+          key: `operation:${operation.id}`,
+          source: "operation" as const,
+          parentId,
+          name: operation.name,
+          active: operation.active,
+          childCount: childCounts.get(`operation:${operation.id}`) || 0
+        };
+      })
+    ]
+  );
+}
+
+function descendantIds(sections: Section[], rootId: string) {
+  const byParent = new Map<string, Section[]>();
+  for (const section of sections) {
+    if (section.parent_id) byParent.set(section.parent_id, [...(byParent.get(section.parent_id) || []), section]);
+  }
+  const result = new Set<string>();
+  const walk = (parentId: string) => {
+    for (const child of byParent.get(parentId) || []) {
+      if (result.has(child.id)) continue;
+      result.add(child.id);
+      walk(child.id);
+    }
+  };
+  walk(rootId);
+  return result;
+}
+
+function buildTreeEntries(nodes: Array<Omit<PickerEntry, "depth">>): PickerEntry[] {
+  const byParent = new Map<string, Array<Omit<PickerEntry, "depth">>>();
+  for (const node of nodes) {
+    byParent.set(node.parentId, [...(byParent.get(node.parentId) || []), node]);
+  }
+  for (const [parentId, children] of byParent.entries()) {
+    byParent.set(parentId, children.sort((left, right) => left.name.localeCompare(right.name, "ru")));
+  }
+  const result: PickerEntry[] = [];
+  const walk = (parentId: string, depth: number, visited: Set<string>) => {
+    for (const node of byParent.get(parentId) || []) {
+      if (visited.has(node.key)) continue;
+      result.push({ ...node, depth });
+      walk(node.key, depth + 1, new Set([...visited, node.key]));
+    }
+  };
+  walk("", 0, new Set());
+  return result;
 }
 
 function PlanMetric({ label, value, accent, children }: { label: string; value: unknown; accent?: boolean; children?: ReactNode }) {

@@ -147,7 +147,10 @@ export type Operation = {
 
 export type OperationCatalogItem = {
   id: string;
+  parent_id?: string | null;
+  section_id?: string | null;
   name: string;
+  is_folder?: boolean;
   active: boolean;
   operation_count?: number;
 };
@@ -155,8 +158,10 @@ export type OperationCatalogItem = {
 export type Section = {
   id: string;
   factory_id: string;
+  parent_id?: string | null;
   name: string;
   order: number;
+  is_folder?: boolean;
   active: boolean;
   operation_count?: number;
 };

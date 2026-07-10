@@ -143,6 +143,7 @@ model TerritoryTree {
   children       TerritoryTree[] @relation("TerritoryTreeChildren")
   planOperations PlanOperation[]
   prices         PriceList[]
+  operations     Operation[]
 
   @@index([factoryId])
   @@index([factoryId, parentId])
@@ -152,11 +153,19 @@ model TerritoryTree {
 
 model Operation {
   id             String          @id @default(uuid()) @db.Uuid
+  parentId       String?         @map("parent_id") @db.Uuid
+  sectionId      String?         @map("section_id") @db.Uuid
   name           String          @db.VarChar(255)
+  isFolder       Boolean         @default(false) @map("is_folder")
   active         Boolean         @default(true)
+  parent         Operation?      @relation("OperationChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children       Operation[]     @relation("OperationChildren")
+  section        TerritoryTree?  @relation(fields: [sectionId], references: [id], onDelete: Restrict)
   planOperations PlanOperation[]
   prices         PriceList[]
 
+  @@index([parentId])
+  @@index([sectionId])
   @@map("operations")
 }
 
