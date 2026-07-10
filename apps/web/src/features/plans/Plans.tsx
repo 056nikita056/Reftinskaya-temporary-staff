@@ -386,7 +386,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const planRow = (
               <tr
                 key={`${plan.id}-plan`}
-                className={`border-t-2 border-slate-300 bg-slate-50 hover:bg-emerald-50/60 ${planSelected ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/40" : ""}`}
+                className={`border-t-2 border-slate-300 bg-slate-50 hover:bg-emerald-50/60 ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
                 onClick={() => {
                   setSelectedPlanId(plan.id);
                   setSelectedOperationId("");
@@ -424,7 +424,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const operationRows = collapsed ? [] : rows.map((operation) => (
               <tr
                 key={`${plan.id}-${operation.id}`}
-                className={`border-t border-slate-100 bg-white hover:bg-emerald-50/30 ${selectedPlanId === plan.id && selectedOperationId === operation.id ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`}
+                className={`border-t border-slate-100 bg-white hover:bg-emerald-50/30 ${selectedPlanId === plan.id && selectedOperationId === operation.id ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : "border-l-4 border-l-transparent"}`}
                 onClick={() => {
                   setSelectedPlanId(plan.id);
                   setSelectedOperationId(operation.id);
