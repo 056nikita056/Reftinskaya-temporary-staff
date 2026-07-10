@@ -325,7 +325,6 @@ function DictionariesLanding({ elementsCount, activeCount, usedCount, onOpen }: 
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-black">Справочники</h2>
-        <p className="mt-1 text-sm font-bold text-slate-500">Выберите справочник для просмотра и редактирования.</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <button className="group rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50" onClick={onOpen}>
@@ -336,7 +335,6 @@ function DictionariesLanding({ elementsCount, activeCount, usedCount, onOpen }: 
             <span className="text-xs font-black uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
           </div>
           <h3 className="mt-4 text-base font-black text-refDark">Структура работ</h3>
-          <p className="mt-1 text-sm font-bold leading-5 text-slate-600">Единый иерархический справочник элементов структуры и операций.</p>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md bg-slate-50 px-2 py-2">
               <p className="text-lg font-black text-refDark">{elementsCount}</p>
