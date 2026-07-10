@@ -28,7 +28,7 @@ type TreeEntry = {
   depth: number;
 };
 
-export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: BootstrapMutate }) {
+export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; mutate: BootstrapMutate; openPlan?: (planId: string) => void }) {
   const sections = [...(data.sections || [])].sort(sortSections);
   const operations = [...(data.operationCatalog || [])].sort(sortOperations);
   const nodes = buildUnifiedNodes(sections, operations);
@@ -298,7 +298,7 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
         {!tree.length && <Empty title="Справочник пуст" text="Создайте элементы структуры и операции внутри единого дерева." />}
         </div>
       </section>
-      {usageNode && <UsageModal node={usageNode} data={data} close={() => setUsageNodeKey("")} />}
+      {usageNode && <UsageModal node={usageNode} data={data} close={() => setUsageNodeKey("")} openPlan={openPlan} />}
     </div>
   );
 }
@@ -413,15 +413,29 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
   );
 }
 
-function UsageModal({ node, data, close }: { node: TreeNode; data: BootstrapData; close: () => void }) {
+function UsageModal({ node, data, close, openPlan }: { node: TreeNode; data: BootstrapData; close: () => void; openPlan?: (planId: string) => void }) {
   const rows = data.operations.filter((operation) => node.source === "section" ? operation.section_id === node.id : operation.operation_id === node.id);
   return (
     <Modal title={`Где используется: ${node.name}`} close={close}>
       <div className="space-y-2">
         {rows.map((operation) => {
           const plan = data.plans.find((item) => item.id === operation.plan_id);
+          const open = () => {
+            if (!plan || !openPlan) return;
+            close();
+            openPlan(plan.id);
+          };
           return (
-            <div key={operation.id} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div
+              key={operation.id}
+              className={`rounded-md border border-slate-200 bg-slate-50 p-3 ${plan && openPlan ? "cursor-pointer hover:border-emerald-200 hover:bg-emerald-50" : ""}`}
+              role={plan && openPlan ? "button" : undefined}
+              tabIndex={plan && openPlan ? 0 : undefined}
+              onDoubleClick={open}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") open();
+              }}
+            >
               <p className="text-sm font-black text-refDark">{plan ? `План ${planPeriod(plan)}` : "План не найден"}</p>
               <p className="mt-1 text-xs font-bold text-slate-600">{displaySectionName(operation.section_name)} · {displayOperationName(operation.name)}</p>
               <p className="mt-1 text-xs font-bold text-slate-500">У кого: {planOwnerLabel(plan?.status)}</p>

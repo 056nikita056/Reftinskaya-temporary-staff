@@ -233,6 +233,11 @@ export function App() {
     setView({ type: "list" });
   };
 
+  const openPlan = (planId: string) => {
+    setActive("plans");
+    setView({ type: "plan", kind: planKindForRole(role), planId });
+  };
+
   const logout = () => {
     api.logout().catch(() => clearAuthTokens()).finally(() => {
       setProfile(null);
@@ -295,6 +300,7 @@ export function App() {
               profileError={profileError}
               selectedFactory={selectedFactory}
               openModule={openModule}
+              openPlan={openPlan}
               logout={logout}
               legacyEnabled={legacyEnabled}
             />
@@ -638,6 +644,7 @@ function Workspace({
   profileError,
   selectedFactory,
   openModule,
+  openPlan,
   logout,
   legacyEnabled
 }: {
@@ -654,6 +661,7 @@ function Workspace({
   profileError: string;
   selectedFactory: Factory | null;
   openModule: (key: ModuleKey) => void;
+  openPlan: (planId: string) => void;
   logout: () => void;
   legacyEnabled: boolean;
 }) {
@@ -689,7 +697,7 @@ function Workspace({
   }
   if (active === "dictionaries") {
     return hasAction(access, "sections.manage")
-      ? <Dictionaries data={data} mutate={mutate} />
+      ? <Dictionaries data={data} mutate={mutate} openPlan={openPlan} />
       : <Empty title="Нет доступа" text="Справочники доступны только пользователям с правом управления участками." />;
   }
   if (active === "personnel") {
@@ -749,4 +757,10 @@ function moduleIcon(module: ModuleKey) {
     profile: UserCircle,
     adminUsers: ShieldCheck
   }[module];
+}
+
+function planKindForRole(role: RoleKey) {
+  if (role === "hr") return "hr";
+  if (role === "outsourcer" || role === "outsourcerBrigadier") return "out";
+  return "factory";
 }
