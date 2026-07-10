@@ -150,7 +150,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   const access = planAccessForPermissions(permissions);
   const kind = primaryKind(access, role);
   const [creatingPlan, setCreatingPlan] = useState(false);
-  const { notify } = useUiFeedback();
+  const { confirm, notify } = useUiFeedback();
   const visiblePlans = data.plans.filter((plan) => canReadPlan(plan, access));
 
   if (view.type === "plan") {
@@ -210,10 +210,12 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           kind={kind}
           plans={visiblePlans}
           operations={data.operations}
+          assignments={data.assignments}
           sections={data.sections || []}
           operationCatalog={data.operationCatalog || []}
           mutate={mutate}
           notify={notify}
+          confirm={confirm}
         />
       ) : (
         <PlansEmpty kind={kind} data={data} />
@@ -222,7 +224,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, notify }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void }) {
+function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean> }) {
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -269,6 +271,45 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
       operations: rows.map(operationCreatePayload)
     }, "План скопирован");
   };
+  const sendPlan = async (plan: Plan) => {
+    const rows = operations.filter((operation) => operation.plan_id === plan.id);
+    const editAccess = editAccessForPlan(access, plan, kind);
+    const sendKind = sendKindForPlan(editAccess, plan);
+    if (!sendKind) return;
+    if (!rows.length) {
+      notify("В плане нет строк для отправки.", "warning");
+      return;
+    }
+    const invalidRows = rows.flatMap((row) => {
+      const missing: string[] = [];
+      if (sendKind === "factory") {
+        if (!row.section_id) missing.push("структура");
+        if (!row.operation_id) missing.push("операция");
+        if (numberValue(row.required_staff) <= 0) missing.push("персонал");
+      }
+      if (sendKind === "out" && numberValue(row.rate_per_hour) <= 0) missing.push("ставка");
+      return missing.length ? [`${displaySectionName(row.section_name)} / ${displayOperationName(row.name)}: ${missing.join(", ")}`] : [];
+    });
+    if (invalidRows.length) {
+      notify(`Проверьте поля: ${invalidRows[0]}`, "warning");
+      return;
+    }
+    if (sendKind === "out") {
+      const notReady = rows.some((operation) => {
+        const need = calculateOutsource(operation.required_staff, operation.staff_count);
+        const assigned = assignments.filter((assignment) => assignment.operation_id === operation.id).length;
+        return assigned < need;
+      });
+      if (notReady) {
+        notify("Нужно распределить временный персонал по всем операциям перед отправкой.", "warning");
+        return;
+      }
+    }
+    const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план аутсорсеру?" : "Отправить план на согласование?";
+    if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
+    const status_code = sendKind === "factory" ? "submitted_to_hr" : sendKind === "hr" ? "received_by_outsourcer" : "on_approval";
+    await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+  };
   return (
     <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
@@ -289,6 +330,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
           {plans.flatMap((plan) => {
             const rows = operations.filter((operation) => operation.plan_id === plan.id);
             const editAccess = editAccessForPlan(access, plan, kind);
+            const sendKind = sendKindForPlan(editAccess, plan);
             const displayStatus = displayPlanStatus(plan, kind, access);
             const planRows = rows.length ? rows : [undefined];
             return planRows.map((operation, index) => (
@@ -304,6 +346,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                 <Td>
                   <div className="flex justify-center gap-1">
                     {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
+                    {index === 0 && sendKind && <IconAction title="Отправить план" onClick={() => sendPlan(plan)}><Send size={15} /></IconAction>}
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><CopyPlus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(plan, operation)}><Trash2 size={15} /></IconAction>}
