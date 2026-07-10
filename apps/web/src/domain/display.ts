@@ -84,7 +84,7 @@ export function internalPlanStatusLabel(plan?: Plan) {
 export function displayPlanStatusForRole(plan: Plan, kind: PlanKind) {
   const code = planStatusCode(plan);
   if (kind === "factory") {
-    if (code === "draft") return "Получено";
+    if (code === "draft") return "На планировании";
     if (["submitted_to_hr", "received_by_outsourcer", "on_approval"].includes(code)) return "Отправлено";
     if (code === "approved") return "Утверждено";
     if (code === "rejected") return "На доработке у аутсорсера";

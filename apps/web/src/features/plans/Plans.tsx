@@ -163,6 +163,12 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
 
   const createPlanInList = async () => {
     if (creatingPlan) return;
+    const section = (data.sections || []).find((item) => item.active);
+    const catalogOperation = (data.operationCatalog || []).find((item) => item.active);
+    if (!section || !catalogOperation) {
+      notify("Для создания плана нужны активные элементы в справочниках структуры и операций.", "warning");
+      return;
+    }
     setCreatingPlan(true);
     try {
       await mutate("/plans", "POST", {
@@ -171,7 +177,17 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
         end_date: defaultEndRu(),
         status: "У планировщика фабрики",
         status_code: "draft",
-        operations: []
+        operations: [{
+          section_id: section.id,
+          operation_id: catalogOperation.id,
+          section_name: section.name,
+          section_order: section.order ?? 99,
+          name: catalogOperation.name,
+          required_staff: 1,
+          staff_count: 0,
+          outsource_count: 1,
+          rate_per_hour: 300
+        }]
       }, "План добавлен");
     } finally {
       setCreatingPlan(false);

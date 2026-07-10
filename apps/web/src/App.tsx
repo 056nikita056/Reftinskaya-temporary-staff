@@ -72,6 +72,7 @@ function accessForRoles(roles: RoleKey[]): RoleAccess {
 
 function modulesForAccess(access: RoleAccess) {
   const allowed = new Set(access.modules);
+  if (access.actions.includes("plans.factory.edit")) allowed.add("dictionaries");
   return moduleOrder.filter((module) => allowed.has(module));
 }
 
@@ -106,6 +107,7 @@ function sameSet<T extends string>(left: readonly T[], right: readonly T[]) {
 }
 
 function hasModule(access: RoleAccess, module: ModuleKey) {
+  if (module === "dictionaries" && access.actions.includes("plans.factory.edit")) return true;
   return access.modules.includes(module);
 }
 
