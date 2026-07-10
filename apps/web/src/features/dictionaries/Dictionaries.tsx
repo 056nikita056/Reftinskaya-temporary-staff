@@ -87,7 +87,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
           setEditKey("");
           setEditDraft({ name: "", parent: "" });
           setUsageNodeKey("");
-          setCollapsedKeys(new Set());
+          setCollapsedKeys(defaultCollapsedKeys(nodesForDictionary(nodes, key)));
           setActiveDictionary(key);
         }}
       />
@@ -664,6 +664,10 @@ function childCountByKey(nodes: TreeNode[]) {
     counts.set(node.parentKey, (counts.get(node.parentKey) || 0) + 1);
   }
   return counts;
+}
+
+function defaultCollapsedKeys(nodes: TreeNode[]) {
+  return new Set(childCountByKey(nodes).keys());
 }
 
 function visibleTreeEntries(tree: TreeEntry[], collapsedKeys: Set<string>) {
