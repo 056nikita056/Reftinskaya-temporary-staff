@@ -233,6 +233,21 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
   const removeOperation = async (operation: Operation) => {
     await mutate(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
   };
+  const copyPlan = async (plan: Plan) => {
+    const rows = operations.filter((operation) => operation.plan_id === plan.id);
+    if (!rows.length) {
+      notify("В плане нет строк для копирования.", "warning");
+      return;
+    }
+    await mutate("/plans", "POST", {
+      owner_role: "factory",
+      start_date: plan.start_date,
+      end_date: plan.end_date,
+      status: "У планировщика фабрики",
+      status_code: "draft",
+      operations: rows.map(operationCreatePayload)
+    }, "План скопирован");
+  };
   return (
     <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
@@ -269,6 +284,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                 <Td numeric>{operation ? <NumberCell value={operation.rate_per_hour} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { rate_per_hour: value }, "Ставка сохранена")} /> : "-"}</Td>
                 <Td>
                   <div className="flex justify-center gap-1">
+                    {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><Copy size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(operation)}><Trash2 size={15} /></IconAction>}
