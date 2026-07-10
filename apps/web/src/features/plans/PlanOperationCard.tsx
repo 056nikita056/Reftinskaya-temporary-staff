@@ -124,10 +124,10 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
       {picker === "section" && (
         <CatalogPicker
           title="Выбор участка"
-          emptyText="Нет элементов с дочерними элементами."
+          emptyText="Нет элементов структуры."
           entries={sectionTree}
           selectedId={row.section_id ? `section:${row.section_id}` : ""}
-          selectable={(entry) => entry.childCount > 0}
+          selectable={() => true}
           onSelect={(entry) => selectSection(entry.id)}
           close={() => setPicker(null)}
         />
@@ -138,7 +138,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           emptyText="Нет операций."
           entries={operationTree}
           selectedId={row.operation_id ? `operation:${row.operation_id}` : ""}
-          selectable={(entry) => entry.childCount === 0}
+          selectable={() => true}
           onSelect={(entry) => selectOperation(entry.key)}
           close={() => setPicker(null)}
         />
