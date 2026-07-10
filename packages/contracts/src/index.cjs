@@ -16,7 +16,7 @@ const BASE_MODULES = Object.freeze(["notifications", "profile"]);
 
 const ACCESS_POLICY = Object.freeze({
   factoryPlanner: Object.freeze({
-    modules: Object.freeze(["dashboard", "plans", ...BASE_MODULES]),
+    modules: Object.freeze(["dashboard", "plans", "dictionaries", ...BASE_MODULES]),
     actions: Object.freeze([
       "dashboard.requestFactAnalytics.view",
       "notifications.view",
