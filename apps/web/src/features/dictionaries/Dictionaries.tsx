@@ -1,4 +1,4 @@
-import { Check, FileText, Layers3, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FileText, Layers3, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
@@ -33,6 +33,8 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
   const operations = [...(data.operationCatalog || [])].sort(sortOperations);
   const nodes = buildUnifiedNodes(sections, operations);
   const tree = buildTree(nodes);
+  const childCounts = childCountByKey(nodes);
+  const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set());
   const [selectedKey, setSelectedKey] = useState("");
   const [draft, setDraft] = useState<Draft>({ name: "", parent: "" });
   const [editKey, setEditKey] = useState("");
@@ -45,6 +47,7 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
   const activeOperations = operations.filter((item) => item.active).length;
   const selectedNode = nodes.find((node) => node.key === selectedKey);
   const usageNode = nodes.find((node) => node.key === usageNodeKey);
+  const visibleTree = visibleTreeEntries(tree, collapsedKeys);
 
   const createNode = async () => {
     const name = draft.name.trim();
@@ -147,6 +150,15 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
     setDraft((current) => ({ ...current, parent: "" }));
   };
 
+  const toggleCollapsed = (node: TreeNode) => {
+    setCollapsedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(node.key)) next.delete(node.key);
+      else next.add(node.key);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -210,16 +222,19 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
           </div>
         </div>
         <div className="min-h-[calc(100vh-23rem)] p-2" onClick={clearSelection}>
-        {tree.map((entry) => (
+        {visibleTree.map((entry) => (
           <TreeRow
             key={entry.node.key}
             entry={entry}
             nodes={nodes}
+            childCount={childCounts.get(entry.node.key) || 0}
+            collapsed={collapsedKeys.has(entry.node.key)}
             selected={selectedKey === entry.node.key}
             editing={editKey === entry.node.key}
             draft={editDraft}
             setDraft={setEditDraft}
             onSelect={() => selectNode(entry.node)}
+            onToggle={() => toggleCollapsed(entry.node)}
             onOpenUsage={() => setUsageNodeKey(entry.node.key)}
           />
         ))}
@@ -231,14 +246,17 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
   );
 }
 
-function TreeRow({ entry, nodes, selected, editing, draft, setDraft, onSelect, onOpenUsage }: {
+function TreeRow({ entry, nodes, childCount, collapsed, selected, editing, draft, setDraft, onSelect, onToggle, onOpenUsage }: {
   entry: TreeEntry;
   nodes: TreeNode[];
+  childCount: number;
+  collapsed: boolean;
   selected: boolean;
   editing: boolean;
   draft: Draft;
   setDraft: (draft: Draft) => void;
   onSelect: () => void;
+  onToggle: () => void;
   onOpenUsage: () => void;
 }) {
   const node = entry.node;
@@ -279,6 +297,21 @@ function TreeRow({ entry, nodes, selected, editing, draft, setDraft, onSelect, o
         ) : (
           <>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {childCount > 0 ? (
+                <button
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-refGreen"
+                  type="button"
+                  title={collapsed ? "Развернуть" : "Свернуть"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggle();
+                  }}
+                >
+                  {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                </button>
+              ) : (
+                <span className="h-6 w-6 shrink-0" />
+              )}
               {iconForNode(node)}
               <p className="min-w-0 truncate text-sm font-black text-refDark">{node.name}</p>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${node.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>{node.active ? "активен" : "архив"}</span>
@@ -379,6 +412,29 @@ function buildTree(nodes: TreeNode[]) {
   };
   walk("", 0, new Set());
   return result;
+}
+
+function childCountByKey(nodes: TreeNode[]) {
+  const counts = new Map<string, number>();
+  for (const node of nodes) {
+    if (!node.parentKey) continue;
+    counts.set(node.parentKey, (counts.get(node.parentKey) || 0) + 1);
+  }
+  return counts;
+}
+
+function visibleTreeEntries(tree: TreeEntry[], collapsedKeys: Set<string>) {
+  const hiddenParents = new Set<string>();
+  const visible: TreeEntry[] = [];
+  for (const entry of tree) {
+    if (hiddenParents.has(entry.node.parentKey)) {
+      hiddenParents.add(entry.node.key);
+      continue;
+    }
+    visible.push(entry);
+    if (collapsedKeys.has(entry.node.key)) hiddenParents.add(entry.node.key);
+  }
+  return visible;
 }
 
 function sectionPayload(draft: Draft, name: string) {
