@@ -337,7 +337,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
   };
   return (
-    <div className="rounded-lg border border-slate-300 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
         <div className="min-w-0">
           <p className="text-xs font-normal uppercase text-slate-500">Выбранный план</p>
