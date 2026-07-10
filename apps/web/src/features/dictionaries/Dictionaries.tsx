@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, FileText, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
@@ -40,6 +40,8 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
   const [editKey, setEditKey] = useState("");
   const [editDraft, setEditDraft] = useState<Draft>({ name: "", parent: "" });
   const [usageNodeKey, setUsageNodeKey] = useState("");
+  const [draggedKey, setDraggedKey] = useState("");
+  const [dropKey, setDropKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingKey, setSavingKey] = useState("");
   const { confirm, notify } = useUiFeedback();
@@ -136,6 +138,37 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
     if (selectedKey === node.key) setSelectedKey("");
   };
 
+  const copyNode = async (node: TreeNode) => {
+    const name = `Копия ${node.name}`;
+    const parent = parentValueForNode(node);
+    const next = node.source === "section"
+      ? await mutate("/sections", "POST", sectionPayload({ name, parent }, name), "Элемент скопирован")
+      : await mutate("/operation-catalog", "POST", operationPayload({ name, parent }, name, operations), "Элемент скопирован");
+    if (next) setDraft((current) => ({ ...current, name: "" }));
+  };
+
+  const moveNode = async (node: TreeNode, target: TreeNode) => {
+    if (node.key === target.key || isDescendant(nodes, target.key, node.key)) {
+      notify("Нельзя перенести элемент внутрь самого себя или своего потомка.", "warning");
+      return;
+    }
+    if (!target.active) {
+      notify("Нельзя перенести элемент в архивный родитель.", "warning");
+      return;
+    }
+    if (node.source === "section" && target.source !== "section") {
+      notify("Элемент структуры можно перенести только внутрь другого элемента структуры.", "warning");
+      return;
+    }
+    if (node.source === "section") {
+      await mutate(`/sections/${node.id}`, "PUT", { parent_id: target.id }, "Элемент перенесен");
+      return;
+    }
+    await mutate(`/operation-catalog/${node.id}`, "PUT", target.source === "section"
+      ? { parent_id: null, section_id: target.id }
+      : { parent_id: target.id, section_id: target.sectionId ?? null }, "Элемент перенесен");
+  };
+
   const selectNode = (node: TreeNode) => {
     setSelectedKey(node.key);
     setDraft((current) => ({
@@ -157,6 +190,14 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
       else next.add(node.key);
       return next;
     });
+  };
+
+  const finishDrop = async (target: TreeNode) => {
+    const draggedNode = nodes.find((node) => node.key === draggedKey);
+    setDraggedKey("");
+    setDropKey("");
+    if (!draggedNode) return;
+    await moveNode(draggedNode, target);
   };
 
   return (
@@ -211,6 +252,9 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
                 <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode || selectedNode.operationCount <= 0} onClick={() => selectedNode && setUsageNodeKey(selectedNode.key)}>
                   Использование
                 </button>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode} onClick={() => selectedNode && copyNode(selectedNode)}>
+                  <Copy size={17} /> Копировать
+                </button>
                 <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-refGreen hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode} onClick={() => selectedNode && startEdit(selectedNode)}>
                   <Pencil size={17} /> Изменить
                 </button>
@@ -229,6 +273,8 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
             nodes={nodes}
             childCount={childCounts.get(entry.node.key) || 0}
             collapsed={collapsedKeys.has(entry.node.key)}
+            dragging={draggedKey === entry.node.key}
+            dropTarget={dropKey === entry.node.key}
             selected={selectedKey === entry.node.key}
             editing={editKey === entry.node.key}
             draft={editDraft}
@@ -236,6 +282,17 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
             onSelect={() => selectNode(entry.node)}
             onToggle={() => toggleCollapsed(entry.node)}
             onOpenUsage={() => setUsageNodeKey(entry.node.key)}
+            onDragStart={() => {
+              setDraggedKey(entry.node.key);
+              setSelectedKey(entry.node.key);
+            }}
+            onDragOver={() => draggedKey && draggedKey !== entry.node.key && setDropKey(entry.node.key)}
+            onDragLeave={() => dropKey === entry.node.key && setDropKey("")}
+            onDrop={() => finishDrop(entry.node)}
+            onDragEnd={() => {
+              setDraggedKey("");
+              setDropKey("");
+            }}
           />
         ))}
         {!tree.length && <Empty title="Справочник пуст" text="Создайте элементы структуры и операции внутри единого дерева." />}
@@ -246,11 +303,13 @@ export function Dictionaries({ data, mutate }: { data: BootstrapData; mutate: Bo
   );
 }
 
-function TreeRow({ entry, nodes, childCount, collapsed, selected, editing, draft, setDraft, onSelect, onToggle, onOpenUsage }: {
+function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, selected, editing, draft, setDraft, onSelect, onToggle, onOpenUsage, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd }: {
   entry: TreeEntry;
   nodes: TreeNode[];
   childCount: number;
   collapsed: boolean;
+  dragging: boolean;
+  dropTarget: boolean;
   selected: boolean;
   editing: boolean;
   draft: Draft;
@@ -258,13 +317,40 @@ function TreeRow({ entry, nodes, childCount, collapsed, selected, editing, draft
   onSelect: () => void;
   onToggle: () => void;
   onOpenUsage: () => void;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
   const node = entry.node;
   return (
     <div
-      className={`cursor-default border-b border-slate-100 px-2 py-2 last:border-b-0 ${selected ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : node.active ? "hover:bg-slate-50" : "bg-slate-50 text-slate-500"}`}
+      className={`cursor-default border-b border-slate-100 px-2 py-2 last:border-b-0 ${dropTarget ? "bg-blue-50 ring-1 ring-inset ring-blue-300" : selected ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : node.active ? "hover:bg-slate-50" : "bg-slate-50 text-slate-500"} ${dragging ? "opacity-50" : ""}`}
       role="button"
       tabIndex={0}
+      draggable={!editing}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        onDragOver();
+      }}
+      onDragLeave={(event) => {
+        event.stopPropagation();
+        onDragLeave();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
       onClick={(event) => {
         event.stopPropagation();
         onSelect();
@@ -297,6 +383,7 @@ function TreeRow({ entry, nodes, childCount, collapsed, selected, editing, draft
         ) : (
           <>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <GripVertical size={15} className="shrink-0 text-slate-300" />
               {childCount > 0 ? (
                 <button
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-refGreen"
