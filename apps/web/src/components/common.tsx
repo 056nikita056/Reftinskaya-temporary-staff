@@ -23,7 +23,17 @@ export function Input({ label, value, onChange, ...inputProps }: { label: string
 }
 
 export function Modal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"><div className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-lg bg-white p-4 shadow-panel"><div className="mb-3 flex items-center justify-between"><h3 className="text-lg font-black">{title}</h3><button onClick={close}><X /></button></div>{children}</div></div>;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onClick={close}>
+      <div className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-lg bg-white p-4 shadow-panel" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-black">{title}</h3>
+          <button onClick={close}><X /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function Empty({ title, text, steps }: { title?: string; text: string; steps?: string[] }) {
