@@ -548,12 +548,12 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
                   {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                 </button>
               ) : (
-                <span className="h-6 w-6 shrink-0" />
+                <span className="flex h-6 w-6 shrink-0" />
               )}
               <p className="min-w-0 truncate text-sm font-black text-refDark">{node.name}</p>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${node.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>{node.active ? "активен" : "архив"}</span>
             </div>
-            <div className="mt-1">
+            <div className="ml-8 mt-1">
               <span className={`text-xs font-bold ${node.operationCount > 0 ? "text-refGreen" : "text-slate-500"}`}>{node.operationCount > 0 ? "Используется" : "Не используется"}</span>
             </div>
           </>
