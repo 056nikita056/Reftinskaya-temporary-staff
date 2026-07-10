@@ -276,7 +276,7 @@ export function App() {
         {!online && <OfflineNotice hasData={Boolean(data)} />}
         {notice && <div className={`fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-md px-4 py-2 text-sm font-black text-white shadow-panel ${noticeTone === "error" ? "bg-red-600" : noticeTone === "warning" ? "bg-orange-500" : "bg-refGreen"}`}>{notice}</div>}
 
-        <div className="mx-auto grid min-h-[100dvh] max-w-[1440px] lg:grid-cols-[260px_1fr]">
+        <div className="grid min-h-[100dvh] w-full lg:grid-cols-[260px_1fr]">
           <Sidebar
             role={role}
             profile={profile}
@@ -285,7 +285,7 @@ export function App() {
             active={active}
             setActive={openModule}
           />
-          <section className="min-w-0 px-3 pb-24 pt-4 md:px-6 lg:px-10 lg:py-8">
+          <section className="min-w-0 px-2 pb-24 pt-3 md:px-3 lg:px-4 lg:py-4">
             <Workspace
               role={role}
               access={access}
@@ -554,7 +554,7 @@ function PasswordChange({
 
 function Sidebar({ role, profile, selectedFactory, modules, active, setActive }: { role: RoleKey; profile: CurrentUserProfile | null; selectedFactory: Factory | null; modules: ModuleKey[]; active: ModuleKey; setActive: (key: ModuleKey) => void }) {
   return (
-    <aside className="hidden border-r border-slate-200 bg-white px-6 py-8 lg:block">
+    <aside className="hidden border-r border-slate-200 bg-white px-3 py-6 lg:block">
       <img src="/ref-logo.png" alt="REF" className="h-14 w-24 object-contain" />
       <div className="mt-5">
         <p className="text-sm font-black text-refDark">{profile?.factoryName || selectedFactory?.name || "Рефтинская птицефабрика"}</p>
