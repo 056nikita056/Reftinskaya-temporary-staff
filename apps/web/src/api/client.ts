@@ -386,8 +386,8 @@ export const api = {
   async factories() {
     return coreRequest<Factory[]>("/factories", { auth: false });
   },
-  async login(login: string, password: string) {
-    const response = await coreRequest<LoginResponse>("/auth/login", { method: "POST", body: { login: login.trim(), password }, auth: false });
+  async login(login: string, password?: string) {
+    const response = await coreRequest<LoginResponse>("/auth/login", { method: "POST", body: { login: login.trim(), ...(password ? { password } : {}) }, auth: false });
     if (response.accessToken && response.refreshToken) {
       writeTokens({ accessToken: response.accessToken, refreshToken: response.refreshToken });
       setStorageNamespace(response.user?.id);

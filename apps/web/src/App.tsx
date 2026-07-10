@@ -317,7 +317,6 @@ export function App() {
 function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access: RoleAccess, factoryId?: string, factory?: Factory) => void }) {
   const saved = useMemo(() => readJson<{ login?: string }>(savedLoginKey, {}), []);
   const [login, setLogin] = useState(saved.login || "admin");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [passwordChange, setPasswordChange] = useState<{ oldPassword: string } | null>(null);
@@ -350,12 +349,7 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
     setError("");
     setSubmitting(true);
     try {
-      const result = await api.login(login, password);
-      if (result.mustChangePassword) {
-        setPasswordChange({ oldPassword: password });
-        setPassword("");
-        return;
-      }
+      const result = await api.login(login);
       startSession(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось войти");
@@ -416,7 +410,6 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
       clearAuthTokens();
       setPending(null);
       setPasswordChange(null);
-      setPassword("");
       setNewPassword("");
       setRepeatPassword("");
       setError("");
@@ -464,10 +457,6 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
           <label className="block">
             <span className="mb-1 block text-xs font-black text-slate-500">Логин</span>
             <input className="field" value={login} onChange={(event) => setLogin(event.target.value)} placeholder="admin" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-black text-slate-500">Пароль</span>
-            <input className={`field ${error ? "border-red-400 focus:border-red-500 focus:ring-red-200" : ""}`} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Пароль" type="password" />
           </label>
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-bold text-red-700">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Входим..." : "Войти"}</button>

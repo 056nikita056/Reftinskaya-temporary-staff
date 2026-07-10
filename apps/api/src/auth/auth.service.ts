@@ -83,12 +83,6 @@ export class AuthService {
       });
     }
 
-    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatches) {
-      await this.registerFailedLogin(user.id, user.failedAttempts);
-      throw this.invalidCredentials();
-    }
-
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
