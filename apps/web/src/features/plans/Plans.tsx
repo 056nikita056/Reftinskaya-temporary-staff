@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
-import { Copy, CopyPlus, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, CopyPlus, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ToastTone, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
@@ -227,6 +227,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
 function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean> }) {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [selectedOperationId, setSelectedOperationId] = useState("");
+  const [collapsedPlanIds, setCollapsedPlanIds] = useState<Set<string>>(() => new Set());
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
@@ -236,6 +237,14 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
   const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
   const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
+  const togglePlanCollapsed = (planId: string) => {
+    setCollapsedPlanIds((current) => {
+      const next = new Set(current);
+      if (next.has(planId)) next.delete(planId);
+      else next.add(planId);
+      return next;
+    });
+  };
   const createOperation = async (plan: Plan, source?: Operation) => {
     const section = source?.section_id ? sections.find((item) => item.id === source.section_id) : sections.find((item) => item.active);
     const catalogOperation = source?.operation_id ? operationCatalog.find((item) => item.id === source.operation_id) : operationCatalog.find((item) => item.active);
@@ -361,7 +370,9 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const rows = operations.filter((operation) => operation.plan_id === plan.id);
             const editAccess = editAccessForPlan(access, plan, kind);
             const displayStatus = displayPlanStatus(plan, kind, access);
-            const planRows = rows.length ? rows : [undefined];
+            const collapsed = collapsedPlanIds.has(plan.id);
+            const canCollapse = rows.length > 1;
+            const planRows = rows.length ? (collapsed ? rows.slice(0, 1) : rows) : [undefined];
             return planRows.map((operation, index) => (
               <tr
                 key={`${plan.id}-${operation?.id || "empty"}`}
@@ -371,7 +382,28 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                   setSelectedOperationId(operation?.id || "");
                 }}
               >
-                <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : ""}</Td>
+                <Td>
+                  {index === 0 ? (
+                    <div className="flex items-center justify-center gap-1">
+                      {canCollapse ? (
+                        <button
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-refGreen"
+                          type="button"
+                          title={collapsed ? "Развернуть" : "Свернуть"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            togglePlanCollapsed(plan.id);
+                          }}
+                        >
+                          {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                      ) : (
+                        <span className="h-7 w-7 shrink-0" />
+                      )}
+                      <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
+                    </div>
+                  ) : ""}
+                </Td>
                 <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
                 <Td>{operation ? <CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "-"}</Td>
