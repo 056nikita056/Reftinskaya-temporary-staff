@@ -271,6 +271,17 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     }
     await mutate(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
   };
+  const removeSelected = async () => {
+    if (!selectedPlan || !selectedEditAccess?.factory) return;
+    if (selectedOperation) {
+      await removeOperation(selectedPlan, selectedOperation);
+      setSelectedOperationId("");
+      return;
+    }
+    await mutate(`/plans/${selectedPlan.id}`, "DELETE", undefined, "План удален");
+    setSelectedPlanId("");
+    setSelectedOperationId("");
+  };
   const copyPlan = async (plan: Plan) => {
     const rows = operations.filter((operation) => operation.plan_id === plan.id);
     if (!rows.length) {
@@ -345,7 +356,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           <ToolbarAction title="Дублировать строку" disabled={!selectedPlan || !selectedOperation || !selectedEditAccess?.factory} onClick={() => selectedPlan && selectedOperation && createOperation(selectedPlan, selectedOperation)}>
             <CopyPlus size={16} /> Дублировать
           </ToolbarAction>
-          <ToolbarAction title="Удалить строку" danger disabled={!selectedPlan || !selectedOperation || !selectedEditAccess?.factory} onClick={() => selectedPlan && selectedOperation && removeOperation(selectedPlan, selectedOperation)}>
+          <ToolbarAction title={selectedOperation ? "Удалить запись" : "Удалить план"} danger disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={removeSelected}>
             <Trash2 size={16} /> Удалить
           </ToolbarAction>
         </div>
@@ -371,51 +382,71 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const editAccess = editAccessForPlan(access, plan, kind);
             const displayStatus = displayPlanStatus(plan, kind, access);
             const collapsed = collapsedPlanIds.has(plan.id);
-            const canCollapse = rows.length > 1;
-            const planRows = rows.length ? (collapsed ? rows.slice(0, 1) : rows) : [undefined];
-            return planRows.map((operation, index) => (
+            const canCollapse = rows.length > 0;
+            const planRequired = rows.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
+            const planStaff = rows.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
+            const planOutsource = rows.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
+            const planSelected = selectedPlanId === plan.id && !selectedOperationId;
+            const planRow = (
               <tr
-                key={`${plan.id}-${operation?.id || "empty"}`}
-                className={`border-t border-slate-200 hover:bg-emerald-50/30 ${selectedPlanId === plan.id && (!operation || selectedOperationId === operation.id) ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`}
+                key={`${plan.id}-plan`}
+                className={`border-t-2 border-slate-300 bg-slate-50 hover:bg-emerald-50/60 ${planSelected ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/40" : ""}`}
                 onClick={() => {
                   setSelectedPlanId(plan.id);
-                  setSelectedOperationId(operation?.id || "");
+                  setSelectedOperationId("");
                 }}
               >
                 <Td>
-                  {index === 0 ? (
-                    <div className="flex items-center justify-center gap-1">
-                      {canCollapse ? (
-                        <button
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-refGreen"
-                          type="button"
-                          title={collapsed ? "Развернуть" : "Свернуть"}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            togglePlanCollapsed(plan.id);
-                          }}
-                        >
-                          {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                        </button>
-                      ) : (
-                        <span className="h-7 w-7 shrink-0" />
-                      )}
-                      <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
-                    </div>
-                  ) : ""}
+                  <div className="flex items-center justify-center gap-1">
+                    {canCollapse ? (
+                      <button
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-white hover:text-refGreen"
+                        type="button"
+                        title={collapsed ? "Развернуть" : "Свернуть"}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          togglePlanCollapsed(plan.id);
+                        }}
+                      >
+                        {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                    ) : (
+                      <span className="h-7 w-7 shrink-0" />
+                    )}
+                    <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
+                  </div>
                 </Td>
-                <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : ""}</Td>
-                <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
-                <Td>{operation ? <CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "-"}</Td>
-                <Td>{operation ? <CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "Нет строк плана"}</Td>
-                <Td numeric>{operation ? <NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /> : "-"}</Td>
-                <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
-                <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
-                <Td>
-                  {selectedPlanId === plan.id && operation && selectedOperationId === operation.id ? <span className="text-xs font-black text-refGreen">Выбрано</span> : ""}
-                </Td>
+                <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
+                <Td><span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span></Td>
+                <Td><span className="font-black text-refDark">План</span></Td>
+                <Td><span className="text-xs font-black text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
+                <Td numeric>{planRequired}</Td>
+                <Td numeric>{planStaff}</Td>
+                <Td numeric>{planOutsource}</Td>
+                <Td>{planSelected ? <span className="text-xs font-black text-refGreen">План</span> : ""}</Td>
+              </tr>
+            );
+            const operationRows = collapsed ? [] : rows.map((operation) => (
+              <tr
+                key={`${plan.id}-${operation.id}`}
+                className={`border-t border-slate-100 bg-white hover:bg-emerald-50/30 ${selectedPlanId === plan.id && selectedOperationId === operation.id ? "bg-emerald-50 ring-1 ring-inset ring-refGreen/30" : ""}`}
+                onClick={() => {
+                  setSelectedPlanId(plan.id);
+                  setSelectedOperationId(operation.id);
+                }}
+              >
+                <Td>{""}</Td>
+                <Td>{""}</Td>
+                <Td>{""}</Td>
+                <Td><div className="ml-6 border-l-2 border-slate-200 pl-3"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></div></Td>
+                <Td><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
+                <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
+                <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
+                <Td numeric>{calculateOutsource(operation.required_staff, operation.staff_count)}</Td>
+                <Td>{selectedPlanId === plan.id && selectedOperationId === operation.id ? <span className="text-xs font-black text-refGreen">Запись</span> : ""}</Td>
               </tr>
             ));
+            return [planRow, ...operationRows];
           })}
         </tbody>
         <tfoot className="sticky bottom-0 bg-slate-100 font-black text-refDark">
