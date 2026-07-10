@@ -413,6 +413,7 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
         if (node.operationCount > 0) onOpenUsage();
       }}
       onKeyDown={(event) => {
+        if (isEditableControl(event.target)) return;
         if (event.key === "Enter") onSelect();
         if (event.key === " ") {
           event.preventDefault();
@@ -463,6 +464,10 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
       </div>
     </div>
   );
+}
+
+function isEditableControl(target: EventTarget | null) {
+  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
 }
 
 function UsageModal({ node, data, close, openPlan }: { node: TreeNode; data: BootstrapData; close: () => void; openPlan?: (planId: string) => void }) {
