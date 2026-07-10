@@ -15,6 +15,7 @@ type PlanAccess = {
   hr: boolean;
   out: boolean;
   outApprove: boolean;
+  admin: boolean;
 };
 
 type NewPlanDraft = {
@@ -53,7 +54,8 @@ function planAccessForPermissions(access: RoleAccess): PlanAccess {
     factory: access.actions.includes("plans.factory.edit"),
     hr: access.actions.includes("plans.hr.edit"),
     out: access.actions.includes("plans.out.edit"),
-    outApprove: access.actions.includes("plans.out.approve")
+    outApprove: access.actions.includes("plans.out.approve"),
+    admin: access.actions.includes("admin.users.manage")
   };
 }
 
@@ -341,6 +343,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const editable = hasEditAccess(editAccess);
   const isEdit = Boolean(edit && editable);
   const sendKind = sendKindForPlan(editAccess, plan);
+  const canDeletePlan = access.admin || editAccess.factory;
 
   const save = async () => {
     if (editAccess.factory && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
@@ -443,11 +446,24 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
     back();
   };
 
+  const deletePlan = async () => {
+    if (!await confirm({
+      title: "Удалить план?",
+      message: `План ${planPeriod(plan)} будет удален вместе со строками, назначениями и фактами.`,
+      confirmLabel: "Удалить",
+      cancelLabel: "Отменить",
+      tone: "error"
+    })) return;
+    await mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
+    back();
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black" onClick={back}>Назад</button>
         <div className="flex gap-2">
+          {access.admin && <button className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-black text-red-600 hover:bg-red-100" onClick={deletePlan}><Trash2 size={16} /> Удалить</button>}
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
@@ -461,7 +477,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
       )}
       {isEdit && (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-panel">
-          {editAccess.factory && <button className="rounded-md p-2 text-red-600" onClick={() => mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален").then(back)}><Trash2 /></button>}
+          {canDeletePlan && !access.admin && <button className="rounded-md p-2 text-red-600" onClick={deletePlan}><Trash2 /></button>}
           <div className="ml-auto flex gap-2">
             <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-black" onClick={save}><Save size={16} className="inline" /> Сохранить</button>
             <button className="btn-primary gap-2" onClick={send}><Send size={16} /> Отправить</button>

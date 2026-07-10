@@ -14,6 +14,18 @@ function optimisticData(current: BootstrapData | null, path: string, method: "PO
   if (resource === "plans" && method === "PUT") {
     return { ...current, plans: current.plans.map((item) => (item.id === id ? { ...item, ...payload } : item)) };
   }
+  if (resource === "plans" && method === "DELETE") {
+    const operationIds = new Set(current.operations.filter((item) => item.plan_id === id).map((item) => item.id));
+    const factIds = new Set(current.facts.filter((item) => item.plan_id === id).map((item) => item.id));
+    return {
+      ...current,
+      plans: current.plans.filter((item) => item.id !== id),
+      operations: current.operations.filter((item) => item.plan_id !== id),
+      assignments: current.assignments.filter((item) => item.plan_id !== id && !operationIds.has(item.operation_id)),
+      facts: current.facts.filter((item) => item.plan_id !== id),
+      explanations: current.explanations.filter((item) => !factIds.has(item.fact_entry_id))
+    };
+  }
   if (resource === "operations" && method === "PUT") {
     return { ...current, operations: current.operations.map((item) => (item.id === id ? { ...item, ...payload } : item)) };
   }
