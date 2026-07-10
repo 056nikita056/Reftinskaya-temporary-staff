@@ -373,7 +373,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             <Th numeric>Персонал</Th>
             <Th numeric>Штат</Th>
             <Th numeric>Аутсорсинг</Th>
-            <Th>Действия</Th>
           </tr>
         </thead>
         <tbody>
@@ -423,7 +422,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td numeric>{planRequired}</Td>
                 <Td numeric>{planStaff}</Td>
                 <Td numeric>{planOutsource}</Td>
-                <Td>{planSelected ? <span className="text-xs font-black text-refGreen">План</span> : ""}</Td>
               </tr>
             );
             const operationRows = collapsed ? [] : rows.map((operation) => (
@@ -443,7 +441,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
                 <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
                 <Td numeric>{calculateOutsource(operation.required_staff, operation.staff_count)}</Td>
-                <Td>{selectedPlanId === plan.id && selectedOperationId === operation.id ? <span className="text-xs font-black text-refGreen">Запись</span> : ""}</Td>
               </tr>
             ));
             return [planRow, ...operationRows];
@@ -459,7 +456,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             <Td numeric>{totalRequired}</Td>
             <Td numeric>{totalStaff}</Td>
             <Td numeric>{totalOutsource}</Td>
-            <Td>{""}</Td>
           </tr>
         </tfoot>
       </table>
