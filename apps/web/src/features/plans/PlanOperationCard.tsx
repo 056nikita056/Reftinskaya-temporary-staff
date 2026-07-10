@@ -223,7 +223,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
   );
 }
 
-type PickerEntry = {
+export type PickerEntry = {
   id: string;
   key: string;
   source: "section" | "operation";
@@ -234,7 +234,7 @@ type PickerEntry = {
   childCount: number;
 };
 
-function CatalogPicker({ title, emptyText, entries, selectedId, selectable, onSelect, close }: { title: string; emptyText: string; entries: PickerEntry[]; selectedId: string; selectable: (entry: PickerEntry) => boolean; onSelect: (entry: PickerEntry) => void; close: () => void }) {
+export function CatalogPicker({ title, emptyText, entries, selectedId, selectable, onSelect, close }: { title: string; emptyText: string; entries: PickerEntry[]; selectedId: string; selectable: (entry: PickerEntry) => boolean; onSelect: (entry: PickerEntry) => void; close: () => void }) {
   const visibleEntries = entries.filter((entry) => entry.active);
   return (
     <Modal title={title} close={close}>
@@ -277,7 +277,7 @@ function ReadonlyCell({ children, align = "left", accent }: { children: ReactNod
   );
 }
 
-function buildSectionTree(sections: Section[]): PickerEntry[] {
+export function buildSectionTree(sections: Section[]): PickerEntry[] {
   const childCounts = new Map<string, number>();
   for (const section of sections) {
     if (section.parent_id) childCounts.set(section.parent_id, (childCounts.get(section.parent_id) || 0) + 1);
@@ -295,7 +295,7 @@ function buildSectionTree(sections: Section[]): PickerEntry[] {
   );
 }
 
-function buildOperationTree(operations: OperationCatalogItem[]): PickerEntry[] {
+export function buildOperationTree(operations: OperationCatalogItem[]): PickerEntry[] {
   const allowedIds = new Set(operations.map((operation) => operation.id));
   const childCounts = new Map<string, number>();
   for (const operation of operations) {

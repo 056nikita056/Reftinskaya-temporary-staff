@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { PlanOperationCard, type PlanEditAccess } from "./PlanOperationCard";
+import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
 import { Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
-import type { Assignment, BootstrapData, Employee, Operation, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
+import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal, Readonly, SectionTitle } from "../../components/common";
@@ -180,6 +180,8 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           kind={kind}
           plans={visiblePlans}
           operations={data.operations}
+          sections={data.sections || []}
+          operationCatalog={data.operationCatalog || []}
           mutate={mutate}
           openPlan={(planId) => setView({ type: "plan", kind, planId })}
         />
@@ -190,7 +192,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; mutate: BootstrapMutate; openPlan: (planId: string) => void }) {
+function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; openPlan: (planId: string) => void }) {
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -224,8 +226,8 @@ function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { 
                 <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : null}</Td>
                 <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : null}</Td>
                 <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
-                <Td>{operation ? displaySectionName(operation.section_name) : "-"}</Td>
-                <Td>{operation ? displayOperationName(operation.name) : "Нет строк плана"}</Td>
+                <Td>{operation ? <CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "-"}</Td>
+                <Td>{operation ? <CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "Нет строк плана"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
@@ -257,6 +259,52 @@ function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { 
         </tfoot>
       </table>
     </div>
+  );
+}
+
+function CatalogCell({ mode, operation, editable, sections, operationCatalog, mutate }: { mode: "section" | "operation"; operation: Operation; editable: boolean; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate }) {
+  const [open, setOpen] = useState(false);
+  const entries = mode === "section" ? buildSectionTree(sections) : buildOperationTree(operationCatalog);
+  const selectedId = mode === "section" ? operation.section_id ? `section:${operation.section_id}` : "" : operation.operation_id ? `operation:${operation.operation_id}` : "";
+  const label = mode === "section" ? displaySectionName(operation.section_name) : displayOperationName(operation.name);
+  const select = async (entry: PickerEntry) => {
+    if (!editable) return;
+    if (mode === "section") {
+      const section = sections.find((item) => item.id === entry.id);
+      await mutate(`/operations/${operation.id}`, "PUT", {
+        section_id: section?.id,
+        section_name: section?.name || "",
+        section_order: section?.order ?? operation.section_order
+      }, "Структура сохранена");
+    } else {
+      const catalogOperation = operationCatalog.find((item) => item.id === entry.id);
+      await mutate(`/operations/${operation.id}`, "PUT", {
+        operation_id: catalogOperation?.id,
+        name: catalogOperation?.name || entry.name
+      }, "Операция сохранена");
+    }
+    setOpen(false);
+  };
+
+  if (!editable) return <span>{label}</span>;
+
+  return (
+    <>
+      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-left text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
+        {label}
+      </button>
+      {open && (
+        <CatalogPicker
+          title={mode === "section" ? "Выбор участка" : "Выбор операции"}
+          emptyText={mode === "section" ? "Нет элементов структуры." : "Нет операций."}
+          entries={entries}
+          selectedId={selectedId}
+          selectable={() => true}
+          onSelect={select}
+          close={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
