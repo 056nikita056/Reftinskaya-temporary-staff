@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PlanOperationCard, type PlanEditAccess } from "./PlanOperationCard";
 import { Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
@@ -174,22 +174,113 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           </button>
         )}
       </div>
-      <div className="grid gap-3">
-        {visiblePlans.map((plan) => (
-          <button key={plan.id} className="rounded-lg bg-slate-100 p-4 text-left transition hover:bg-slate-200" onClick={() => setView({ type: "plan", kind, planId: plan.id })}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-black">План {planPeriod(plan)}</p>
-                <p className="mt-1 text-sm font-bold text-slate-600">Персонал: {plan.required_staff || 0} · Штат: {plan.staff_count || 0} · Аутсорсинг: {calculateOutsource(plan.required_staff, plan.staff_count)}</p>
-              </div>
-              <span className={`text-xs font-black ${statusTone(displayPlanStatus(plan, kind, access))}`}>{displayPlanStatus(plan, kind, access)}</span>
-            </div>
-          </button>
-        ))}
-        {!visiblePlans.length && <PlansEmpty kind={kind} data={data} />}
-      </div>
+      {visiblePlans.length ? (
+        <PlanExcelList
+          access={access}
+          kind={kind}
+          plans={visiblePlans}
+          operations={data.operations}
+          mutate={mutate}
+          openPlan={(planId) => setView({ type: "plan", kind, planId })}
+        />
+      ) : (
+        <PlansEmpty kind={kind} data={data} />
+      )}
     </div>
   );
+}
+
+function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; mutate: BootstrapMutate; openPlan: (planId: string) => void }) {
+  return (
+    <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
+      <table className="min-w-[1180px] w-full border-collapse text-sm">
+        <thead className="sticky top-0 z-10 bg-slate-100 text-[11px] font-black uppercase text-slate-500">
+          <tr>
+            <Th>Начало</Th>
+            <Th>Окончание</Th>
+            <Th>Статус</Th>
+            <Th>Структура</Th>
+            <Th>Операция</Th>
+            <Th numeric>Персонал</Th>
+            <Th numeric>Штат</Th>
+            <Th numeric>Аутсорсинг</Th>
+            <Th numeric>Часы</Th>
+            <Th numeric>Ставка</Th>
+            <Th>План</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {plans.flatMap((plan) => {
+            const rows = operations.filter((operation) => operation.plan_id === plan.id);
+            const editAccess = editAccessForPlan(access, plan, kind);
+            const displayStatus = displayPlanStatus(plan, kind, access);
+            const planRows = rows.length ? rows : [undefined];
+            return planRows.map((operation, index) => (
+              <tr key={`${plan.id}-${operation?.id || "empty"}`} className="border-t border-slate-200 hover:bg-emerald-50/30">
+                <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : null}</Td>
+                <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : null}</Td>
+                <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
+                <Td>{operation ? displaySectionName(operation.section_name) : "-"}</Td>
+                <Td>{operation ? displayOperationName(operation.name) : "Нет строк плана"}</Td>
+                <Td numeric>{operation ? <NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /> : "-"}</Td>
+                <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
+                <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
+                <Td numeric>{operation ? <NumberCell value={operation.hours_per_day} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { hours_per_day: value }, "Часы сохранены")} /> : "-"}</Td>
+                <Td numeric>{operation ? <NumberCell value={operation.rate_per_hour} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { rate_per_hour: value }, "Ставка сохранена")} /> : "-"}</Td>
+                <Td>
+                  {index === 0 ? (
+                    <button className="rounded bg-slate-100 px-2 py-1 text-xs font-black text-refGreen hover:bg-emerald-50" onClick={() => openPlan(plan.id)}>
+                      Открыть
+                    </button>
+                  ) : null}
+                </Td>
+              </tr>
+            ));
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PlanDateInput({ value, editable, onSave }: { value: string; editable: boolean; onSave: (value: string) => Promise<unknown> }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  if (!editable) return <span className="font-semibold">{value}</span>;
+  return (
+    <input
+      className="h-8 w-28 rounded border border-slate-300 px-2 text-center font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => draft !== value && onSave(draft)}
+    />
+  );
+}
+
+function NumberCell({ value, editable, onSave }: { value: number; editable: boolean; onSave: (value: number) => Promise<unknown> }) {
+  const [draft, setDraft] = useState(String(value ?? 0));
+  useEffect(() => setDraft(String(value ?? 0)), [value]);
+  if (!editable) return <span className="font-black">{value ?? 0}</span>;
+  return (
+    <input
+      className="h-8 w-20 rounded border border-slate-300 px-2 text-center font-black outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      inputMode="numeric"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        const next = numberValue(draft);
+        if (next !== numberValue(value)) void onSave(next);
+      }}
+    />
+  );
+}
+
+function Th({ children, numeric }: { children: string; numeric?: boolean }) {
+  return <th className={`whitespace-nowrap border-r border-slate-200 px-2 py-2 text-left last:border-r-0 ${numeric ? "text-center" : ""}`}>{children}</th>;
+}
+
+function Td({ children, numeric }: { children: ReactNode; numeric?: boolean }) {
+  return <td className={`border-r border-slate-200 px-2 py-1.5 align-middle font-semibold last:border-r-0 ${numeric ? "text-center tabular-nums" : ""}`}>{children}</td>;
 }
 
 function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
