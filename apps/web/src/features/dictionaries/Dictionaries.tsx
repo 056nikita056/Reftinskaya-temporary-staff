@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, Copy, FileText, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
@@ -515,7 +515,6 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
         ) : (
           <>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <GripVertical size={15} className="shrink-0 text-slate-300" />
               {childCount > 0 ? (
                 <button
                   className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-refGreen"
@@ -531,7 +530,6 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
               ) : (
                 <span className="h-6 w-6 shrink-0" />
               )}
-              {iconForNode(node)}
               <p className="min-w-0 truncate text-sm font-black text-refDark">{node.name}</p>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${node.active ? "bg-emerald-50 text-refGreen" : "bg-slate-200 text-slate-600"}`}>{node.active ? "активен" : "архив"}</span>
             </div>
@@ -714,10 +712,6 @@ function isDescendant(nodes: TreeNode[], candidateKey: string, parentKey: string
     cursor = nodes.find((node) => node.key === cursor)?.parentKey || "";
   }
   return false;
-}
-
-function iconForNode(node: TreeNode) {
-  return <FileText size={17} className={`shrink-0 ${node.source === "section" ? "text-blue-600" : "text-refGreen"}`} />;
 }
 
 function sortTreeNodes(left: TreeNode, right: TreeNode) {
