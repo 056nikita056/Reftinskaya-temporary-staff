@@ -191,6 +191,11 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
 }
 
 function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; mutate: BootstrapMutate; openPlan: (planId: string) => void }) {
+  const visiblePlanIds = new Set(plans.map((plan) => plan.id));
+  const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
+  const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
+  const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
+  const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
   return (
     <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
@@ -236,6 +241,20 @@ function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { 
             ));
           })}
         </tbody>
+        <tfoot className="sticky bottom-0 bg-slate-100 font-black text-refDark">
+          <tr className="border-t-2 border-slate-300">
+            <Td>Итого</Td>
+            <Td>{""}</Td>
+            <Td>{""}</Td>
+            <Td>{""}</Td>
+            <Td>{""}</Td>
+            <Td numeric>{totalRequired}</Td>
+            <Td numeric>{totalStaff}</Td>
+            <Td numeric>{totalOutsource}</Td>
+            <Td>{""}</Td>
+            <Td>{""}</Td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
