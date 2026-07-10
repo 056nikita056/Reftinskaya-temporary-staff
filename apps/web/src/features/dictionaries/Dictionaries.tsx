@@ -29,6 +29,7 @@ type TreeEntry = {
 };
 
 export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; mutate: BootstrapMutate; openPlan?: (planId: string) => void }) {
+  const [activeDictionary, setActiveDictionary] = useState<"list" | "workStructure">("list");
   const sections = [...(data.sections || [])].sort(sortSections);
   const operations = [...(data.operationCatalog || [])].sort(sortOperations);
   const nodes = buildUnifiedNodes(sections, operations);
@@ -50,6 +51,17 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   const selectedNode = nodes.find((node) => node.key === selectedKey);
   const usageNode = nodes.find((node) => node.key === usageNodeKey);
   const visibleTree = visibleTreeEntries(tree, collapsedKeys);
+
+  if (activeDictionary === "list") {
+    return (
+      <DictionariesLanding
+        elementsCount={sections.length + operations.length}
+        activeCount={activeSections + activeOperations}
+        usedCount={nodes.filter((node) => node.operationCount > 0).length}
+        onOpen={() => setActiveDictionary("workStructure")}
+      />
+    );
+  }
 
   const createNode = async () => {
     const name = draft.name.trim();
@@ -202,9 +214,14 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-black">Справочник структуры работ</h2>
-        <p className="mt-1 text-sm font-bold text-slate-500">Элементы: {activeSections} активных из {sections.length} · Операции: {activeOperations} активных из {operations.length}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black">Справочник структуры работ</h2>
+          <p className="mt-1 text-sm font-bold text-slate-500">Элементы: {activeSections} активных из {sections.length} · Операции: {activeOperations} активных из {operations.length}</p>
+        </div>
+        <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-200" onClick={() => setActiveDictionary("list")}>
+          Назад
+        </button>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -299,6 +316,43 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
         </div>
       </section>
       {usageNode && <UsageModal node={usageNode} data={data} close={() => setUsageNodeKey("")} openPlan={openPlan} />}
+    </div>
+  );
+}
+
+function DictionariesLanding({ elementsCount, activeCount, usedCount, onOpen }: { elementsCount: number; activeCount: number; usedCount: number; onOpen: () => void }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-black">Справочники</h2>
+        <p className="mt-1 text-sm font-bold text-slate-500">Выберите справочник для просмотра и редактирования.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <button className="group rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50" onClick={onOpen}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-refGreen text-white">
+              <FileText size={20} />
+            </div>
+            <span className="text-xs font-black uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
+          </div>
+          <h3 className="mt-4 text-base font-black text-refDark">Структура работ</h3>
+          <p className="mt-1 text-sm font-bold leading-5 text-slate-600">Единый иерархический справочник элементов структуры и операций.</p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-md bg-slate-50 px-2 py-2">
+              <p className="text-lg font-black text-refDark">{elementsCount}</p>
+              <p className="text-[10px] font-black uppercase text-slate-500">Всего</p>
+            </div>
+            <div className="rounded-md bg-slate-50 px-2 py-2">
+              <p className="text-lg font-black text-refDark">{activeCount}</p>
+              <p className="text-[10px] font-black uppercase text-slate-500">Активно</p>
+            </div>
+            <div className="rounded-md bg-slate-50 px-2 py-2">
+              <p className="text-lg font-black text-refDark">{usedCount}</p>
+              <p className="text-[10px] font-black uppercase text-slate-500">В планах</p>
+            </div>
+          </div>
+        </button>
+      </div>
     </div>
   );
 }
