@@ -39,6 +39,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   const childCounts = childCountByKey(dictionaryNodes);
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set());
   const [selectedKey, setSelectedKey] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
   const [draft, setDraft] = useState<Draft>({ name: "", parent: "" });
   const [editKey, setEditKey] = useState("");
   const [editDraft, setEditDraft] = useState<Draft>({ name: "", parent: "" });
@@ -51,6 +52,8 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   const activeSections = sections.filter((item) => item.active).length;
   const activeOperations = operations.filter((item) => item.active).length;
   const selectedNode = dictionaryNodes.find((node) => node.key === selectedKey);
+  const selectedCount = selectedKeys.size;
+  const actionNode = selectedCount === 1 ? selectedNode : undefined;
   const usageNode = dictionaryNodes.find((node) => node.key === usageNodeKey);
   const visibleTree = visibleTreeEntries(tree, collapsedKeys);
   const dictionaryTitle = activeDictionary === "operations" ? "Справочник операций" : "Справочник структуры работ";
@@ -79,6 +82,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
         ]}
         onOpen={(key) => {
           setSelectedKey("");
+          setSelectedKeys(new Set());
           setDraft({ name: "", parent: "" });
           setEditKey("");
           setEditDraft({ name: "", parent: "" });
@@ -110,6 +114,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
 
   const startEdit = (node: TreeNode) => {
     setSelectedKey(node.key);
+    setSelectedKeys(new Set([node.key]));
     setEditKey(node.key);
     setEditDraft({
       name: node.name,
@@ -175,6 +180,11 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
     const path = node.source === "section" ? `/sections/${node.id}` : `/operation-catalog/${node.id}`;
     await mutate(path, "DELETE", undefined, "Элемент удален");
     if (selectedKey === node.key) setSelectedKey("");
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      next.delete(node.key);
+      return next;
+    });
   };
 
   const copyNode = async (node: TreeNode) => {
@@ -204,7 +214,19 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
       : { parent_id: target.id, section_id: target.sectionId ?? null }, "Элемент перенесен");
   };
 
-  const selectNode = (node: TreeNode) => {
+  const selectNode = (node: TreeNode, range = false) => {
+    if (range && selectedKey) {
+      const from = visibleTree.findIndex((entry) => entry.node.key === selectedKey);
+      const to = visibleTree.findIndex((entry) => entry.node.key === node.key);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        setSelectedKeys(new Set(visibleTree.slice(start, end + 1).map((entry) => entry.node.key)));
+      } else {
+        setSelectedKeys(new Set([node.key]));
+      }
+    } else {
+      setSelectedKeys(new Set([node.key]));
+    }
     setSelectedKey(node.key);
     setDraft((current) => ({
       ...current,
@@ -214,6 +236,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
 
   const clearSelection = () => {
     setSelectedKey("");
+    setSelectedKeys(new Set());
     cancelEdit();
     setDraft((current) => ({ ...current, parent: "" }));
   };
@@ -275,12 +298,12 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
           <div className="min-w-0">
             <p className="text-xs font-black uppercase text-slate-500">Выбранный элемент</p>
-            <p className="min-w-0 truncate text-sm font-black text-refDark">{selectedNode ? selectedNode.name : "Не выбран"}</p>
+            <p className="min-w-0 truncate text-sm font-black text-refDark">{selectedCount > 1 ? `Выбрано: ${selectedCount}` : selectedNode ? selectedNode.name : "Не выбран"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {editKey ? (
               <>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!selectedNode || savingKey === selectedNode.key} onClick={() => selectedNode && saveNode(selectedNode)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-refGreen px-3 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300" disabled={!actionNode || savingKey === actionNode.key} onClick={() => actionNode && saveNode(actionNode)}>
                   <Check size={17} /> Сохранить
                 </button>
                 <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200" onClick={cancelEdit}>
@@ -289,16 +312,16 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
               </>
             ) : (
               <>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode || selectedNode.operationCount <= 0} onClick={() => selectedNode && setUsageNodeKey(selectedNode.key)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode || actionNode.operationCount <= 0} onClick={() => actionNode && setUsageNodeKey(actionNode.key)}>
                   Использование
                 </button>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode} onClick={() => selectedNode && copyNode(selectedNode)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && copyNode(actionNode)}>
                   <Copy size={17} /> Копировать
                 </button>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-refGreen hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode} onClick={() => selectedNode && startEdit(selectedNode)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-black text-refGreen hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && startEdit(actionNode)}>
                   <Pencil size={17} /> Изменить
                 </button>
-                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!selectedNode} onClick={() => selectedNode && removeNode(selectedNode)}>
+                <button className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-50 px-3 text-sm font-black text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:text-slate-400" disabled={!actionNode} onClick={() => actionNode && removeNode(actionNode)}>
                   <Trash2 size={17} /> Удалить
                 </button>
               </>
@@ -315,16 +338,17 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
             collapsed={collapsedKeys.has(entry.node.key)}
             dragging={draggedKey === entry.node.key}
             dropTarget={dropKey === entry.node.key}
-            selected={selectedKey === entry.node.key}
+            selected={selectedKeys.has(entry.node.key)}
             editing={editKey === entry.node.key}
             draft={editDraft}
             setDraft={setEditDraft}
-            onSelect={() => selectNode(entry.node)}
+            onSelect={(range) => selectNode(entry.node, range)}
             onToggle={() => toggleCollapsed(entry.node)}
             onOpenUsage={() => setUsageNodeKey(entry.node.key)}
             onDragStart={() => {
               setDraggedKey(entry.node.key);
               setSelectedKey(entry.node.key);
+              setSelectedKeys(new Set([entry.node.key]));
             }}
             onDragOver={() => draggedKey && draggedKey !== entry.node.key && setDropKey(entry.node.key)}
             onDragLeave={() => dropKey === entry.node.key && setDropKey("")}
@@ -391,7 +415,7 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
   editing: boolean;
   draft: Draft;
   setDraft: (draft: Draft) => void;
-  onSelect: () => void;
+  onSelect: (range?: boolean) => void;
   onToggle: () => void;
   onOpenUsage: () => void;
   onDragStart: () => void;
@@ -430,19 +454,19 @@ function TreeRow({ entry, nodes, childCount, collapsed, dragging, dropTarget, se
       onDragEnd={onDragEnd}
       onClick={(event) => {
         event.stopPropagation();
-        onSelect();
+        onSelect(event.shiftKey);
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        onSelect();
+        onSelect(event.shiftKey);
         if (node.operationCount > 0) onOpenUsage();
       }}
       onKeyDown={(event) => {
         if (isEditableControl(event.target)) return;
-        if (event.key === "Enter") onSelect();
+        if (event.key === "Enter") onSelect(event.shiftKey);
         if (event.key === " ") {
           event.preventDefault();
-          onSelect();
+          onSelect(event.shiftKey);
         }
       }}
     >
