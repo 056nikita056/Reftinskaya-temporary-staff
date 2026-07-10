@@ -27,14 +27,16 @@ type TreeEntry = {
   node: TreeNode;
   depth: number;
 };
+type DictionaryKey = "list" | "workStructure" | "operations";
 
 export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; mutate: BootstrapMutate; openPlan?: (planId: string) => void }) {
-  const [activeDictionary, setActiveDictionary] = useState<"list" | "workStructure">("list");
+  const [activeDictionary, setActiveDictionary] = useState<DictionaryKey>("list");
   const sections = [...(data.sections || [])].sort(sortSections);
   const operations = [...(data.operationCatalog || [])].sort(sortOperations);
   const nodes = buildUnifiedNodes(sections, operations);
-  const tree = buildTree(nodes);
-  const childCounts = childCountByKey(nodes);
+  const dictionaryNodes = nodesForDictionary(nodes, activeDictionary);
+  const tree = buildTree(dictionaryNodes);
+  const childCounts = childCountByKey(dictionaryNodes);
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set());
   const [selectedKey, setSelectedKey] = useState("");
   const [draft, setDraft] = useState<Draft>({ name: "", parent: "" });
@@ -48,17 +50,42 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   const { confirm, notify } = useUiFeedback();
   const activeSections = sections.filter((item) => item.active).length;
   const activeOperations = operations.filter((item) => item.active).length;
-  const selectedNode = nodes.find((node) => node.key === selectedKey);
-  const usageNode = nodes.find((node) => node.key === usageNodeKey);
+  const selectedNode = dictionaryNodes.find((node) => node.key === selectedKey);
+  const usageNode = dictionaryNodes.find((node) => node.key === usageNodeKey);
   const visibleTree = visibleTreeEntries(tree, collapsedKeys);
+  const dictionaryTitle = activeDictionary === "operations" ? "Справочник операций" : "Справочник структуры работ";
+  const dictionaryStats = activeDictionary === "operations"
+    ? `Операции: ${activeOperations} активных из ${operations.length}`
+    : `Элементы: ${activeSections} активных из ${sections.length}`;
 
   if (activeDictionary === "list") {
     return (
       <DictionariesLanding
-        elementsCount={sections.length + operations.length}
-        activeCount={activeSections + activeOperations}
-        usedCount={nodes.filter((node) => node.operationCount > 0).length}
-        onOpen={() => setActiveDictionary("workStructure")}
+        cards={[
+          {
+            key: "workStructure",
+            title: "Структура работ",
+            total: sections.length,
+            active: activeSections,
+            used: nodes.filter((node) => node.source === "section" && node.operationCount > 0).length
+          },
+          {
+            key: "operations",
+            title: "Операции",
+            total: operations.length,
+            active: activeOperations,
+            used: nodes.filter((node) => node.source === "operation" && node.operationCount > 0).length
+          }
+        ]}
+        onOpen={(key) => {
+          setSelectedKey("");
+          setDraft({ name: "", parent: "" });
+          setEditKey("");
+          setEditDraft({ name: "", parent: "" });
+          setUsageNodeKey("");
+          setCollapsedKeys(new Set());
+          setActiveDictionary(key);
+        }}
       />
     );
   }
@@ -72,7 +99,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
     if (saving) return;
     setSaving(true);
     try {
-      const next = shouldCreateSection(draft.parent)
+      const next = activeDictionary === "workStructure"
         ? await mutate("/sections", "POST", sectionPayload(draft, name), "Элемент структуры добавлен")
         : await mutate("/operation-catalog", "POST", operationPayload(draft, name, operations), "Операция добавлена");
       if (next) setDraft({ ...draft, name: "" });
@@ -114,7 +141,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   };
 
   const removeNode = async (node: TreeNode) => {
-    const childCount = nodes.filter((item) => item.parentKey === node.key).length;
+    const childCount = dictionaryNodes.filter((item) => item.parentKey === node.key).length;
     if (childCount > 0) {
       notify("Сначала удалите или перенесите дочерние элементы.", "warning");
       return;
@@ -160,16 +187,12 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   };
 
   const moveNode = async (node: TreeNode, target: TreeNode) => {
-    if (node.key === target.key || isDescendant(nodes, target.key, node.key)) {
+    if (node.key === target.key || isDescendant(dictionaryNodes, target.key, node.key)) {
       notify("Нельзя перенести элемент внутрь самого себя или своего потомка.", "warning");
       return;
     }
     if (!target.active) {
       notify("Нельзя перенести элемент в архивный родитель.", "warning");
-      return;
-    }
-    if (node.source === "section" && target.source !== "section") {
-      notify("Элемент структуры можно перенести только внутрь другого элемента структуры.", "warning");
       return;
     }
     if (node.source === "section") {
@@ -205,7 +228,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   };
 
   const finishDrop = async (target: TreeNode) => {
-    const draggedNode = nodes.find((node) => node.key === draggedKey);
+    const draggedNode = dictionaryNodes.find((node) => node.key === draggedKey);
     setDraggedKey("");
     setDropKey("");
     if (!draggedNode) return;
@@ -216,8 +239,8 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black">Справочник структуры работ</h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">Элементы: {activeSections} активных из {sections.length} · Операции: {activeOperations} активных из {operations.length}</p>
+          <h2 className="text-xl font-black">{dictionaryTitle}</h2>
+          <p className="mt-1 text-sm font-bold text-slate-500">{dictionaryStats}</p>
         </div>
         <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-200" onClick={() => setActiveDictionary("list")}>
           Назад
@@ -240,7 +263,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
           </label>
           <label className="text-sm font-black text-slate-600">
             Материнский элемент
-            <ParentSelect className="field mt-1" value={draft.parent} nodes={nodes} onChange={(parent) => setDraft({ ...draft, parent })} />
+            <ParentSelect className="field mt-1" value={draft.parent} nodes={dictionaryNodes} onChange={(parent) => setDraft({ ...draft, parent })} />
           </label>
           <button className="btn-primary h-11 self-end gap-2 disabled:bg-slate-300" disabled={saving} onClick={createNode}>
             <Plus size={17} /> Создать
@@ -287,7 +310,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
           <TreeRow
             key={entry.node.key}
             entry={entry}
-            nodes={nodes}
+            nodes={dictionaryNodes}
             childCount={childCounts.get(entry.node.key) || 0}
             collapsed={collapsedKeys.has(entry.node.key)}
             dragging={draggedKey === entry.node.key}
@@ -312,7 +335,7 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
             }}
           />
         ))}
-        {!tree.length && <Empty title="Справочник пуст" text="Создайте элементы структуры и операции внутри единого дерева." />}
+        {!tree.length && <Empty title="Справочник пуст" text={activeDictionary === "operations" ? "Создайте первую операцию." : "Создайте первый элемент структуры."} />}
         </div>
       </section>
       {usageNode && <UsageModal node={usageNode} data={data} close={() => setUsageNodeKey("")} openPlan={openPlan} />}
@@ -320,36 +343,38 @@ export function Dictionaries({ data, mutate, openPlan }: { data: BootstrapData; 
   );
 }
 
-function DictionariesLanding({ elementsCount, activeCount, usedCount, onOpen }: { elementsCount: number; activeCount: number; usedCount: number; onOpen: () => void }) {
+function DictionariesLanding({ cards, onOpen }: { cards: Array<{ key: Exclude<DictionaryKey, "list">; title: string; total: number; active: number; used: number }>; onOpen: (key: Exclude<DictionaryKey, "list">) => void }) {
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-black">Справочники</h2>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <button className="group rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50" onClick={onOpen}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-refGreen text-white">
-              <FileText size={20} />
+        {cards.map((card) => (
+          <button key={card.key} className="group rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50" onClick={() => onOpen(card.key)}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-refGreen text-white">
+                <FileText size={20} />
+              </div>
+              <span className="text-xs font-black uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
             </div>
-            <span className="text-xs font-black uppercase text-slate-400 group-hover:text-refGreen">Открыть</span>
-          </div>
-          <h3 className="mt-4 text-base font-black text-refDark">Структура работ</h3>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-md bg-slate-50 px-2 py-2">
-              <p className="text-lg font-black text-refDark">{elementsCount}</p>
-              <p className="text-[10px] font-black uppercase text-slate-500">Всего</p>
+            <h3 className="mt-4 text-base font-black text-refDark">{card.title}</h3>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-slate-50 px-2 py-2">
+                <p className="text-lg font-black text-refDark">{card.total}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">Всего</p>
+              </div>
+              <div className="rounded-md bg-slate-50 px-2 py-2">
+                <p className="text-lg font-black text-refDark">{card.active}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">Активно</p>
+              </div>
+              <div className="rounded-md bg-slate-50 px-2 py-2">
+                <p className="text-lg font-black text-refDark">{card.used}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">В планах</p>
+              </div>
             </div>
-            <div className="rounded-md bg-slate-50 px-2 py-2">
-              <p className="text-lg font-black text-refDark">{activeCount}</p>
-              <p className="text-[10px] font-black uppercase text-slate-500">Активно</p>
-            </div>
-            <div className="rounded-md bg-slate-50 px-2 py-2">
-              <p className="text-lg font-black text-refDark">{usedCount}</p>
-              <p className="text-[10px] font-black uppercase text-slate-500">В планах</p>
-            </div>
-          </div>
-        </button>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -521,6 +546,17 @@ function ParentSelect({ value, nodes, className, onChange }: { value: ParentValu
   );
 }
 
+function nodesForDictionary(nodes: TreeNode[], dictionary: DictionaryKey) {
+  const source = dictionary === "operations" ? "operation" : "section";
+  const filtered = nodes.filter((node) => node.source === source);
+  const keys = new Set(filtered.map((node) => node.key));
+  return filtered.map((node) => ({
+    ...node,
+    parentKey: keys.has(node.parentKey) ? node.parentKey : "",
+    sectionId: dictionary === "operations" ? null : node.sectionId
+  }));
+}
+
 function buildUnifiedNodes(sections: Section[], operations: OperationCatalogItem[]): TreeNode[] {
   const result: TreeNode[] = sections.map((section) => ({
     key: `section:${section.id}`,
@@ -615,10 +651,6 @@ function operationPayload(draft: Draft, name: string, operations: OperationCatal
 
 function parentValueForNode(node: TreeNode): ParentValue {
   return node.parentKey as ParentValue;
-}
-
-function shouldCreateSection(parent: ParentValue) {
-  return !parent || parent.startsWith("section:");
 }
 
 function isDescendant(nodes: TreeNode[], candidateKey: string, parentKey: string) {

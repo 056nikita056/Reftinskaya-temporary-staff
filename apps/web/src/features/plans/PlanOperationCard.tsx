@@ -22,17 +22,14 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
   const canOpen = (kind === "out" || Boolean(editAccess?.out)) && !edit && Boolean(onOpen);
   const assignedText = assigned.length ? assigned.join(", ") : "";
   const update = (patch: Partial<Operation>) => onChange?.(patch);
-  const sectionTree = buildSectionTree(sections, operationCatalog);
-  const operationTree = buildOperationTree(sections, operationCatalog, row.section_id);
+  const sectionTree = buildSectionTree(sections);
+  const operationTree = buildOperationTree(operationCatalog);
   const selectSection = (sectionId: string) => {
     const section = sections.find((item) => item.id === sectionId);
-    const currentOperation = operationCatalog.find((item) => item.id === row.operation_id);
-    const keepOperation = !currentOperation?.section_id || currentOperation.section_id === sectionId;
     update({
       section_id: section?.id || undefined,
       section_name: section?.name || "",
-      section_order: section?.order ?? row.section_order,
-      ...(keepOperation ? {} : { operation_id: undefined, name: "" })
+      section_order: section?.order ?? row.section_order
     });
     setPicker(null);
   };
@@ -40,10 +37,8 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
     const node = operationTree.find((item) => item.key === nodeKey);
     if (!node) return;
     const operation = node.source === "operation" ? operationCatalog.find((item) => item.id === node.id) : undefined;
-    const section = operation?.section_id ? sections.find((item) => item.id === operation.section_id) : undefined;
     update({
       operation_id: operation?.id,
-      ...(section ? { section_id: section.id, section_name: section.name, section_order: section.order } : {}),
       name: node.name
     });
     setPicker(null);
@@ -140,7 +135,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
       {picker === "operation" && (
         <CatalogPicker
           title="Выбор операции"
-          emptyText="Нет конечных элементов для выбранного участка."
+          emptyText="Нет операций."
           entries={operationTree}
           selectedId={row.operation_id ? `operation:${row.operation_id}` : ""}
           selectable={(entry) => entry.childCount === 0}
@@ -189,13 +184,10 @@ function CatalogPicker({ title, emptyText, entries, selectedId, selectable, onSe
   );
 }
 
-function buildSectionTree(sections: Section[], operations: OperationCatalogItem[]): PickerEntry[] {
+function buildSectionTree(sections: Section[]): PickerEntry[] {
   const childCounts = new Map<string, number>();
   for (const section of sections) {
     if (section.parent_id) childCounts.set(section.parent_id, (childCounts.get(section.parent_id) || 0) + 1);
-  }
-  for (const operation of operations) {
-    if (operation.section_id) childCounts.set(operation.section_id, (childCounts.get(operation.section_id) || 0) + 1);
   }
   return buildTreeEntries(
     sections.map((section) => ({
@@ -210,74 +202,24 @@ function buildSectionTree(sections: Section[], operations: OperationCatalogItem[
   );
 }
 
-function buildOperationTree(sections: Section[], operations: OperationCatalogItem[], sectionId?: string | null): PickerEntry[] {
-  const descendantSectionIds = sectionId ? descendantIds(sections, sectionId) : new Set(sections.map((section) => section.id));
-  if (sectionId) descendantSectionIds.add(sectionId);
-  const sectionNodes = sections.filter((section) => !sectionId || descendantSectionIds.has(section.id)).map((section) => ({
-    id: section.id,
-    key: `section:${section.id}`,
-    source: "section" as const,
-    parentId: section.parent_id && (!sectionId || descendantSectionIds.has(section.parent_id)) ? `section:${section.parent_id}` : "",
-    name: section.name,
-    active: section.active,
-    childCount: 0
-  }));
-  const allowed = operations.filter((operation) => !sectionId || !operation.section_id || descendantSectionIds.has(operation.section_id));
-  const allowedIds = new Set(allowed.map((operation) => operation.id));
-  const sectionNodeIds = new Set(sectionNodes.map((section) => section.id));
+function buildOperationTree(operations: OperationCatalogItem[]): PickerEntry[] {
+  const allowedIds = new Set(operations.map((operation) => operation.id));
   const childCounts = new Map<string, number>();
-  for (const section of sectionNodes) {
-    if (section.parentId.startsWith("section:")) {
-      const parentId = section.parentId.slice("section:".length);
-      childCounts.set(`section:${parentId}`, (childCounts.get(`section:${parentId}`) || 0) + 1);
-    }
-  }
-  for (const operation of allowed) {
-    const parentKey = operation.parent_id && allowedIds.has(operation.parent_id)
-      ? `operation:${operation.parent_id}`
-      : operation.section_id && sectionNodeIds.has(operation.section_id)
-        ? `section:${operation.section_id}`
-        : "";
+  for (const operation of operations) {
+    const parentKey = operation.parent_id && allowedIds.has(operation.parent_id) ? `operation:${operation.parent_id}` : "";
     if (parentKey) childCounts.set(parentKey, (childCounts.get(parentKey) || 0) + 1);
   }
   return buildTreeEntries(
-    [
-      ...sectionNodes.map((section) => ({ ...section, childCount: childCounts.get(section.key) || 0 })),
-      ...allowed.map((operation) => {
-        const parentId = operation.parent_id && allowedIds.has(operation.parent_id)
-          ? `operation:${operation.parent_id}`
-          : operation.section_id && sectionNodeIds.has(operation.section_id)
-            ? `section:${operation.section_id}`
-            : "";
-        return {
-          id: operation.id,
-          key: `operation:${operation.id}`,
-          source: "operation" as const,
-          parentId,
-          name: operation.name,
-          active: operation.active,
-          childCount: childCounts.get(`operation:${operation.id}`) || 0
-        };
-      })
-    ]
+    operations.map((operation) => ({
+      id: operation.id,
+      key: `operation:${operation.id}`,
+      source: "operation" as const,
+      parentId: operation.parent_id && allowedIds.has(operation.parent_id) ? `operation:${operation.parent_id}` : "",
+      name: operation.name,
+      active: operation.active,
+      childCount: childCounts.get(`operation:${operation.id}`) || 0
+    }))
   );
-}
-
-function descendantIds(sections: Section[], rootId: string) {
-  const byParent = new Map<string, Section[]>();
-  for (const section of sections) {
-    if (section.parent_id) byParent.set(section.parent_id, [...(byParent.get(section.parent_id) || []), section]);
-  }
-  const result = new Set<string>();
-  const walk = (parentId: string) => {
-    for (const child of byParent.get(parentId) || []) {
-      if (result.has(child.id)) continue;
-      result.add(child.id);
-      walk(child.id);
-    }
-  };
-  walk(rootId);
-  return result;
 }
 
 function buildTreeEntries(nodes: Array<Omit<PickerEntry, "depth">>): PickerEntry[] {
