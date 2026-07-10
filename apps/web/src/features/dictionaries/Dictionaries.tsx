@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, FileText, Layers3, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { BootstrapData, OperationCatalogItem, Section } from "../../api/client";
 import type { BootstrapMutate } from "../../domain/types";
@@ -476,8 +476,7 @@ function isDescendant(nodes: TreeNode[], candidateKey: string, parentKey: string
 }
 
 function iconForNode(node: TreeNode) {
-  if (node.source === "section") return <Layers3 size={17} className="shrink-0 text-blue-600" />;
-  return <FileText size={17} className="shrink-0 text-refGreen" />;
+  return <FileText size={17} className={`shrink-0 ${node.source === "section" ? "text-blue-600" : "text-refGreen"}`} />;
 }
 
 function sortTreeNodes(left: TreeNode, right: TreeNode) {
