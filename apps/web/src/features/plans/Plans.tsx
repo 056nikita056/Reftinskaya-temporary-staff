@@ -282,7 +282,6 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
             <Th numeric>Персонал</Th>
             <Th numeric>Штат</Th>
             <Th numeric>Аутсорсинг</Th>
-            <Th numeric>Ставка</Th>
             <Th>Действия</Th>
           </tr>
         </thead>
@@ -302,7 +301,6 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                 <Td numeric>{operation ? <NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
-                <Td numeric>{operation ? <NumberCell value={operation.rate_per_hour} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { rate_per_hour: value }, "Ставка сохранена")} /> : "-"}</Td>
                 <Td>
                   <div className="flex justify-center gap-1">
                     {index === 0 && access.factory && <IconAction title="Скопировать план" onClick={() => copyPlan(plan)}><Copy size={15} /></IconAction>}
@@ -325,7 +323,6 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
             <Td numeric>{totalRequired}</Td>
             <Td numeric>{totalStaff}</Td>
             <Td numeric>{totalOutsource}</Td>
-            <Td>{""}</Td>
             <Td>{""}</Td>
           </tr>
         </tfoot>
