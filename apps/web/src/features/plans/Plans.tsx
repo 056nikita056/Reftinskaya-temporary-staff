@@ -198,7 +198,6 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           operationCatalog={data.operationCatalog || []}
           mutate={mutate}
           notify={notify}
-          openPlan={(planId) => setView({ type: "plan", kind, planId })}
         />
       ) : (
         <PlansEmpty kind={kind} data={data} />
@@ -207,7 +206,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, notify, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; openPlan: (planId: string) => void }) {
+function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, notify }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void }) {
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -273,11 +272,6 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                     {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><Copy size={15} /></IconAction>}
                     {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(operation)}><Trash2 size={15} /></IconAction>}
-                    {index === 0 ? (
-                      <button className="rounded bg-slate-100 px-2 py-1 text-xs font-black text-refGreen hover:bg-emerald-50" onClick={() => openPlan(plan.id)}>
-                        Открыть
-                      </button>
-                    ) : null}
                   </div>
                 </Td>
               </tr>
