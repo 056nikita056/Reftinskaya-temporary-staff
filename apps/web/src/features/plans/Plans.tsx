@@ -344,7 +344,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           <p className="truncate text-sm font-black text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <ToolbarAction title="Копировать план" disabled={!selectedPlan || !access.factory} onClick={() => selectedPlan && copyPlan(selectedPlan)}>
+          <ToolbarAction title="Копировать план" disabled={!selectedPlan || Boolean(selectedOperation) || !access.factory} onClick={() => selectedPlan && !selectedOperation && copyPlan(selectedPlan)}>
             <Copy size={16} /> Копировать
           </ToolbarAction>
           <ToolbarAction title="Отправить план" primary disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
