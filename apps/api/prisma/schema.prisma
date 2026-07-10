@@ -100,7 +100,6 @@ model PlanOperation {
   territory        TerritoryTree @relation(fields: [territoryId], references: [id], onDelete: Restrict)
   operation        Operation     @relation(fields: [operationId], references: [id], onDelete: Restrict)
 
-  @@unique([planId, territoryId, operationId])
   @@index([territoryId])
   @@index([operationId])
   @@map("plan_operations")

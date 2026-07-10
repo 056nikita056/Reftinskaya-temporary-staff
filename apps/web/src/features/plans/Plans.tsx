@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
-import { Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
-import type { BootstrapMutate, PlanKind, ViewState } from "../../domain/types";
+import type { BootstrapMutate, PlanKind, ToastTone, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal, Readonly, SectionTitle } from "../../components/common";
 import { useUiFeedback } from "../../ui/feedback";
@@ -150,6 +150,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   const access = planAccessForPermissions(permissions);
   const kind = primaryKind(access, role);
   const [creatingPlan, setCreatingPlan] = useState(false);
+  const { notify } = useUiFeedback();
   const visiblePlans = data.plans.filter((plan) => canReadPlan(plan, access));
 
   if (view.type === "plan") {
@@ -160,17 +161,30 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
     return <AssignmentScreen canEditOut={access.out} planId={view.planId} operationId={view.operationId} data={data} mutate={mutate} back={() => setView({ type: "plan", kind: "out", planId: view.planId })} />;
   }
 
-  if (creatingPlan && access.factory) {
-    return <NewPlanDetail access={access} data={data} mutate={mutate} back={() => setCreatingPlan(false)} />;
-  }
+  const createPlanInList = async () => {
+    if (creatingPlan) return;
+    setCreatingPlan(true);
+    try {
+      await mutate("/plans", "POST", {
+        owner_role: "factory",
+        start_date: todayRu(),
+        end_date: defaultEndRu(),
+        status: "У планировщика фабрики",
+        status_code: "draft",
+        operations: []
+      }, "План добавлен");
+    } finally {
+      setCreatingPlan(false);
+    }
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-xl font-black">Планы</h2>
         {access.factory && (
-          <button className="btn-primary gap-2" onClick={() => setCreatingPlan(true)}>
-            <Plus size={17} /> План
+          <button className="btn-primary gap-2 disabled:bg-slate-300" disabled={creatingPlan} onClick={createPlanInList}>
+            <Plus size={17} /> {creatingPlan ? "Создание..." : "План"}
           </button>
         )}
       </div>
@@ -183,6 +197,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           sections={data.sections || []}
           operationCatalog={data.operationCatalog || []}
           mutate={mutate}
+          notify={notify}
           openPlan={(planId) => setView({ type: "plan", kind, planId })}
         />
       ) : (
@@ -192,12 +207,33 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; openPlan: (planId: string) => void }) {
+function PlanExcelList({ access, kind, plans, operations, sections, operationCatalog, mutate, notify, openPlan }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; openPlan: (planId: string) => void }) {
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
   const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
   const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
+  const createOperation = async (plan: Plan, source?: Operation) => {
+    const section = source?.section_id ? sections.find((item) => item.id === source.section_id) : sections.find((item) => item.active);
+    const catalogOperation = source?.operation_id ? operationCatalog.find((item) => item.id === source.operation_id) : operationCatalog.find((item) => item.active);
+    if (!section || !catalogOperation) {
+      notify("Для добавления строки нужны активные элементы в справочниках структуры и операций.", "warning");
+      return;
+    }
+    await mutate("/operations", "POST", {
+      plan_id: plan.id,
+      section_id: section.id,
+      operation_id: catalogOperation.id,
+      name: catalogOperation.name,
+      required_staff: source ? numberValue(source.required_staff) : 1,
+      staff_count: source ? numberValue(source.staff_count) : 0,
+      outsource_count: source ? calculateOutsource(source.required_staff, source.staff_count) : 1,
+      rate_per_hour: source ? numberValue(source.rate_per_hour, 300) : 300
+    }, source ? "Строка продублирована" : "Строка добавлена");
+  };
+  const removeOperation = async (operation: Operation) => {
+    await mutate(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
+  };
   return (
     <div className="overflow-auto rounded-lg border border-slate-300 bg-white shadow-sm">
       <table className="min-w-[1180px] w-full border-collapse text-sm">
@@ -212,7 +248,7 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
             <Th numeric>Штат</Th>
             <Th numeric>Аутсорсинг</Th>
             <Th numeric>Ставка</Th>
-            <Th>План</Th>
+            <Th>Действия</Th>
           </tr>
         </thead>
         <tbody>
@@ -223,8 +259,8 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
             const planRows = rows.length ? rows : [undefined];
             return planRows.map((operation, index) => (
               <tr key={`${plan.id}-${operation?.id || "empty"}`} className="border-t border-slate-200 hover:bg-emerald-50/30">
-                <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : null}</Td>
-                <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : null}</Td>
+                <Td>{index === 0 ? <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} /> : ""}</Td>
+                <Td>{index === 0 ? <PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /> : ""}</Td>
                 <Td>{index === 0 ? <span className={`font-black ${statusTone(displayStatus)}`}>{displayStatus}</span> : null}</Td>
                 <Td>{operation ? <CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "-"}</Td>
                 <Td>{operation ? <CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /> : "Нет строк плана"}</Td>
@@ -233,11 +269,16 @@ function PlanExcelList({ access, kind, plans, operations, sections, operationCat
                 <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.rate_per_hour} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { rate_per_hour: value }, "Ставка сохранена")} /> : "-"}</Td>
                 <Td>
-                  {index === 0 ? (
-                    <button className="rounded bg-slate-100 px-2 py-1 text-xs font-black text-refGreen hover:bg-emerald-50" onClick={() => openPlan(plan.id)}>
-                      Открыть
-                    </button>
-                  ) : null}
+                  <div className="flex justify-center gap-1">
+                    {editAccess.factory && <IconAction title="Добавить строку" onClick={() => createOperation(plan)}><Plus size={15} /></IconAction>}
+                    {operation && editAccess.factory && <IconAction title="Дублировать строку" onClick={() => createOperation(plan, operation)}><Copy size={15} /></IconAction>}
+                    {operation && editAccess.factory && <IconAction danger title="Удалить строку" onClick={() => removeOperation(operation)}><Trash2 size={15} /></IconAction>}
+                    {index === 0 ? (
+                      <button className="rounded bg-slate-100 px-2 py-1 text-xs font-black text-refGreen hover:bg-emerald-50" onClick={() => openPlan(plan.id)}>
+                        Открыть
+                      </button>
+                    ) : null}
+                  </div>
                 </Td>
               </tr>
             ));
@@ -290,7 +331,7 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
 
   return (
     <>
-      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-left text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
+      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-center text-sm font-black text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
         {label}
       </button>
       {open && (
@@ -305,6 +346,14 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
         />
       )}
     </>
+  );
+}
+
+function IconAction({ children, title, danger, onClick }: { children: ReactNode; title: string; danger?: boolean; onClick: () => void }) {
+  return (
+    <button className={`flex h-7 w-7 items-center justify-center rounded transition ${danger ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-slate-100 text-refGreen hover:bg-emerald-50"}`} type="button" title={title} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
@@ -340,12 +389,12 @@ function NumberCell({ value, editable, onSave }: { value: number; editable: bool
   );
 }
 
-function Th({ children, numeric }: { children: string; numeric?: boolean }) {
-  return <th className={`whitespace-nowrap border-r border-slate-200 px-2 py-2 text-left last:border-r-0 ${numeric ? "text-center" : ""}`}>{children}</th>;
+function Th({ children }: { children: string; numeric?: boolean }) {
+  return <th className="whitespace-nowrap border-r border-slate-200 px-2 py-2 text-center last:border-r-0">{children}</th>;
 }
 
 function Td({ children, numeric }: { children: ReactNode; numeric?: boolean }) {
-  return <td className={`border-r border-slate-200 px-2 py-1.5 align-middle font-semibold last:border-r-0 ${numeric ? "text-center tabular-nums" : ""}`}>{children}</td>;
+  return <td className={`border-r border-slate-200 px-2 py-1.5 text-center align-middle font-semibold last:border-r-0 ${numeric ? "tabular-nums" : ""}`}>{children}</td>;
 }
 
 function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {

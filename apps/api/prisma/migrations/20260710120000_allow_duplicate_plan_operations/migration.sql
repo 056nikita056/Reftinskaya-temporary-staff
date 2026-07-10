@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "plan_operations_plan_id_territories_id_operation_id_key";
