@@ -204,7 +204,6 @@ function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { 
             <Th numeric>Персонал</Th>
             <Th numeric>Штат</Th>
             <Th numeric>Аутсорсинг</Th>
-            <Th numeric>Часы</Th>
             <Th numeric>Ставка</Th>
             <Th>План</Th>
           </tr>
@@ -225,7 +224,6 @@ function PlanExcelList({ access, kind, plans, operations, mutate, openPlan }: { 
                 <Td numeric>{operation ? <NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /> : "-"}</Td>
                 <Td numeric>{operation ? calculateOutsource(operation.required_staff, operation.staff_count) : "-"}</Td>
-                <Td numeric>{operation ? <NumberCell value={operation.hours_per_day} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { hours_per_day: value }, "Часы сохранены")} /> : "-"}</Td>
                 <Td numeric>{operation ? <NumberCell value={operation.rate_per_hour} editable={editAccess.out} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { rate_per_hour: value }, "Ставка сохранена")} /> : "-"}</Td>
                 <Td>
                   {index === 0 ? (
@@ -453,7 +451,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         ...(isDraftOperation(row) ? { plan_id: plan.id } : {}),
         ...(editAccess.factory ? { name: row.name, section_id: row.section_id, operation_id: row.operation_id, required_staff: required } : {}),
         ...(editAccess.hr ? { staff_count: staff, outsource_count: calculateOutsource(required, staff) } : {}),
-        ...(editAccess.out ? { hours_per_day: numberValue(row.hours_per_day, 8), rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
+        ...(editAccess.out ? { rate_per_hour: numberValue(row.rate_per_hour, 300) } : {})
       }, "Сохранено");
     }
   };
@@ -487,10 +485,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         if (!row.operation_id) missing.push("операция");
         if (numberValue(row.required_staff) <= 0) missing.push("персонал");
       }
-      if (sendKind === "out") {
-        if (numberValue(row.hours_per_day) <= 0) missing.push("часы в день");
-        if (numberValue(row.rate_per_hour) <= 0) missing.push("ставка/час");
-      }
+      if (sendKind === "out" && numberValue(row.rate_per_hour) <= 0) missing.push("ставка/час");
       return missing.length ? [`${displaySectionName(row.section_name)} / ${displayOperationName(row.name)}: ${missing.join(", ")}`] : [];
     });
     if (invalidRows.length) {
