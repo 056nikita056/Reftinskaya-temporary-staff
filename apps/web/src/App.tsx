@@ -127,6 +127,7 @@ export function App() {
   const [selectedFactory, setSelectedFactory] = useState<Factory | null>(() => readJson<Factory | null>(selectedFactoryKey, null));
   const [active, setActive] = useState<ModuleKey>("dashboard");
   const [view, setView] = useState<ViewState>({ type: "list" });
+  const [moduleResetKey, setModuleResetKey] = useState(0);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [dialog, setDialog] = useState<ActionDialogState | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -233,6 +234,7 @@ export function App() {
   const openModule = (key: ModuleKey) => {
     setActive(key);
     setView({ type: "list" });
+    setModuleResetKey((current) => current + 1);
   };
 
   const openPlan = (planId: string) => {
@@ -289,6 +291,7 @@ export function App() {
           />
           <section className="min-w-0 px-2 pb-24 pt-3 md:px-3 lg:px-4 lg:py-4">
             <Workspace
+              key={`${active}-${moduleResetKey}`}
               role={role}
               access={access}
               active={active}
