@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
 import { ChevronDown, ChevronRight, Copy, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
@@ -150,8 +150,57 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   const access = planAccessForPermissions(permissions);
   const kind = primaryKind(access, role);
   const [creatingPlan, setCreatingPlan] = useState(false);
+  const [planSearch, setPlanSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sectionFilter, setSectionFilter] = useState("all");
+  const [operationFilter, setOperationFilter] = useState("all");
+  const clearPlanSelectionRef = useRef<(() => void) | null>(null);
   const { confirm, notify } = useUiFeedback();
   const visiblePlans = data.plans.filter((plan) => canReadPlan(plan, access));
+  const visiblePlanIds = new Set(visiblePlans.map((plan) => plan.id));
+  const visibleOperations = data.operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
+  const normalizedSearch = planSearch.trim().toLowerCase();
+  const statusOptions = Array.from(new Set(visiblePlans.map((plan) => displayPlanStatus(plan, kind, access)))).sort((a, b) => a.localeCompare(b, "ru"));
+  const usedSectionIds = new Set(visibleOperations.map((operation) => operation.section_id).filter(Boolean));
+  const usedOperationIds = new Set(visibleOperations.map((operation) => operation.operation_id).filter(Boolean));
+  const sectionOptions = (data.sections || [])
+    .filter((section) => usedSectionIds.has(section.id))
+    .sort((a, b) => displaySectionName(a.name).localeCompare(displaySectionName(b.name), "ru"));
+  const operationOptions = (data.operationCatalog || [])
+    .filter((operation) => usedOperationIds.has(operation.id))
+    .sort((a, b) => displayOperationName(a.name).localeCompare(displayOperationName(b.name), "ru"));
+  const filteredOperationIds = new Set<string>();
+  const filteredPlans = visiblePlans.filter((plan) => {
+    const displayStatus = displayPlanStatus(plan, kind, access);
+    if (statusFilter !== "all" && displayStatus !== statusFilter) return false;
+
+    const planRows = visibleOperations.filter((operation) => operation.plan_id === plan.id);
+    const rowsBySelects = planRows.filter((operation) => (
+      (sectionFilter === "all" || operation.section_id === sectionFilter)
+      && (operationFilter === "all" || operation.operation_id === operationFilter)
+    ));
+    const hasSelectFilters = sectionFilter !== "all" || operationFilter !== "all";
+    if (hasSelectFilters && !rowsBySelects.length) return false;
+
+    const planText = `${planPeriod(plan)} ${displayStatus}`.toLowerCase();
+    const planMatchesSearch = !normalizedSearch || planText.includes(normalizedSearch);
+    const rowsBySearch = !normalizedSearch
+      ? rowsBySelects
+      : rowsBySelects.filter((operation) => `${displaySectionName(operation.section_name)} ${displayOperationName(operation.name)}`.toLowerCase().includes(normalizedSearch));
+    if (normalizedSearch && !planMatchesSearch && !rowsBySearch.length) return false;
+
+    const rowsToShow = planMatchesSearch ? rowsBySelects : rowsBySearch;
+    for (const row of rowsToShow) filteredOperationIds.add(row.id);
+    return true;
+  });
+  const filteredOperations = visibleOperations.filter((operation) => filteredOperationIds.has(operation.id));
+  const activeFilterCount = [planSearch.trim(), statusFilter !== "all", sectionFilter !== "all", operationFilter !== "all"].filter(Boolean).length;
+  const resetFilters = () => {
+    setPlanSearch("");
+    setStatusFilter("all");
+    setSectionFilter("all");
+    setOperationFilter("all");
+  };
 
   if (view.type === "plan") {
     return <PlanDetail kind={view.kind} access={access} edit={view.edit} planId={view.planId} data={data} mutate={mutate} back={() => setView({ type: "list" })} openEdit={() => setView({ type: "plan", kind: view.kind, planId: view.planId, edit: true })} openOperation={(operationId) => setView({ type: "assignment", planId: view.planId, operationId })} />;
@@ -166,7 +215,7 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
     const section = (data.sections || []).find((item) => item.active);
     const catalogOperation = (data.operationCatalog || []).find((item) => item.active);
     if (!section || !catalogOperation) {
-      notify("Для создания плана нужны активные элементы в справочниках структуры и операций.", "warning");
+      notify("Для создания плана нужны активные территории и операции в справочниках.", "warning");
       return;
     }
     setCreatingPlan(true);
@@ -195,8 +244,8 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+    <div className="min-h-[70vh] space-y-3" onClick={() => clearPlanSelectionRef.current?.()}>
+      <div className="flex items-center justify-between gap-2" onClick={(event) => event.stopPropagation()}>
         <h2 className="text-xl font-normal">Планы</h2>
         {access.factory && (
           <button className="btn-primary gap-2 disabled:bg-slate-300" disabled={creatingPlan} onClick={createPlanInList}>
@@ -204,19 +253,51 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
           </button>
         )}
       </div>
+      <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm" onClick={(event) => event.stopPropagation()}>
+        <div className="grid gap-3 lg:grid-cols-[minmax(16rem,1.4fr)_minmax(10rem,0.8fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] lg:items-end">
+          <label className="block">
+            <span className="mb-1 block text-xs font-normal text-slate-500">Поиск</span>
+            <span className="relative block">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <input
+                className="field h-10 pl-9"
+                value={planSearch}
+                onChange={(event) => setPlanSearch(event.target.value)}
+                placeholder="Период, территория, операция"
+              />
+            </span>
+          </label>
+          <PlanFilterSelect label="Статус" value={statusFilter} onChange={setStatusFilter} options={[["all", "Все"], ...statusOptions.map((status) => [status, status] as [string, string])]} />
+          <PlanFilterSelect label="Территория" value={sectionFilter} onChange={setSectionFilter} options={[["all", "Все"], ...sectionOptions.map((section) => [section.id, displaySectionName(section.name)] as [string, string])]} />
+          <PlanFilterSelect label="Операция" value={operationFilter} onChange={setOperationFilter} options={[["all", "Все"], ...operationOptions.map((operation) => [operation.id, displayOperationName(operation.name)] as [string, string])]} />
+          <button
+            className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-normal text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            type="button"
+            disabled={!activeFilterCount}
+            onClick={resetFilters}
+          >
+            Сбросить{activeFilterCount ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+      </section>
       {visiblePlans.length ? (
-        <PlanExcelList
-          access={access}
-          kind={kind}
-          plans={visiblePlans}
-          operations={data.operations}
-          assignments={data.assignments}
-          sections={data.sections || []}
-          operationCatalog={data.operationCatalog || []}
-          mutate={mutate}
-          notify={notify}
-          confirm={confirm}
-        />
+        filteredPlans.length ? (
+          <PlanExcelList
+            access={access}
+            kind={kind}
+            plans={filteredPlans}
+            operations={filteredOperations}
+            assignments={data.assignments}
+            sections={data.sections || []}
+            operationCatalog={data.operationCatalog || []}
+            mutate={mutate}
+            notify={notify}
+            confirm={confirm}
+            clearSelectionRef={clearPlanSelectionRef}
+          />
+        ) : (
+          <Empty title="Планы не найдены" text="Измените фильтры или сбросьте их, чтобы увидеть планы." />
+        )
       ) : (
         <PlansEmpty kind={kind} data={data} />
       )}
@@ -224,10 +305,24 @@ export function Plans({ role, access: permissions, view, setView, data, mutate }
   );
 }
 
-function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean> }) {
+function PlanFilterSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<[string, string]>; onChange: (value: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-normal text-slate-500">{label}</span>
+      <select className="field h-10" value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>{optionLabel}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm, clearSelectionRef }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean>; clearSelectionRef?: MutableRefObject<(() => void) | null> }) {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [selectedOperationId, setSelectedOperationId] = useState("");
-  const [collapsedPlanIds, setCollapsedPlanIds] = useState<Set<string>>(() => new Set());
+  const seenPlanIdsRef = useRef<Set<string>>(new Set(plans.map((plan) => plan.id)));
+  const [collapsedPlanIds, setCollapsedPlanIds] = useState<Set<string>>(() => new Set(plans.map((plan) => plan.id)));
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
@@ -237,6 +332,18 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
   const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
   const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
+  const allPlansCollapsed = plans.length > 0 && plans.every((plan) => collapsedPlanIds.has(plan.id));
+  useEffect(() => {
+    const nextVisiblePlanIds = new Set(plans.map((plan) => plan.id));
+    const newPlanIds = plans.map((plan) => plan.id).filter((id) => !seenPlanIdsRef.current.has(id));
+    if (!newPlanIds.length && seenPlanIdsRef.current.size === nextVisiblePlanIds.size) return;
+    setCollapsedPlanIds((current) => {
+      const next = new Set([...current].filter((id) => nextVisiblePlanIds.has(id)));
+      for (const id of newPlanIds) next.add(id);
+      return next;
+    });
+    seenPlanIdsRef.current = nextVisiblePlanIds;
+  }, [plans]);
   const togglePlanCollapsed = (planId: string) => {
     setCollapsedPlanIds((current) => {
       const next = new Set(current);
@@ -245,11 +352,25 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       return next;
     });
   };
+  const toggleAllPlansCollapsed = () => {
+    setCollapsedPlanIds(allPlansCollapsed ? new Set() : new Set(plans.map((plan) => plan.id)));
+  };
+  const clearSelection = () => {
+    setSelectedPlanId("");
+    setSelectedOperationId("");
+  };
+  useEffect(() => {
+    if (!clearSelectionRef) return;
+    clearSelectionRef.current = clearSelection;
+    return () => {
+      if (clearSelectionRef.current === clearSelection) clearSelectionRef.current = null;
+    };
+  }, [clearSelectionRef]);
   const createOperation = async (plan: Plan, source?: Operation) => {
     const section = source?.section_id ? sections.find((item) => item.id === source.section_id) : sections.find((item) => item.active);
     const catalogOperation = source?.operation_id ? operationCatalog.find((item) => item.id === source.operation_id) : operationCatalog.find((item) => item.active);
     if (!section || !catalogOperation) {
-      notify("Для добавления строки нужны активные элементы в справочниках структуры и операций.", "warning");
+      notify("Для добавления строки нужны активные территории и операции в справочниках.", "warning");
       return;
     }
     await mutate("/operations", "POST", {
@@ -309,7 +430,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     const invalidRows = rows.flatMap((row) => {
       const missing: string[] = [];
       if (sendKind === "factory") {
-        if (!row.section_id) missing.push("структура");
+        if (!row.section_id) missing.push("территория");
         if (!row.operation_id) missing.push("операция");
         if (numberValue(row.required_staff) <= 0) missing.push("персонал");
       }
@@ -337,13 +458,17 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
   };
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2">
+    <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" onClick={clearSelection}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2" onClick={(event) => event.stopPropagation()}>
         <div className="min-w-0">
           <p className="text-xs font-normal uppercase text-slate-500">Выбранный план</p>
           <p className="truncate text-sm font-normal text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ToolbarAction title={allPlansCollapsed ? "Развернуть все планы" : "Свернуть все планы"} disabled={!plans.length} onClick={toggleAllPlansCollapsed}>
+            {allPlansCollapsed ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {allPlansCollapsed ? "Развернуть все" : "Свернуть все"}
+          </ToolbarAction>
           <ToolbarAction title={selectedOperation ? "Копировать запись" : "Копировать план"} disabled={!selectedPlan || !access.factory || (Boolean(selectedOperation) && !selectedEditAccess?.factory)} onClick={() => selectedPlan && (selectedOperation ? createOperation(selectedPlan, selectedOperation) : copyPlan(selectedPlan))}>
             <Copy size={16} /> Копировать
           </ToolbarAction>
@@ -358,18 +483,30 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           </ToolbarAction>
         </div>
       </div>
-      <div className="overflow-auto">
-      <table className="min-w-[1180px] w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-slate-100 text-sm font-normal uppercase text-slate-500">
+      <div className="overflow-hidden" onClick={clearSelection}>
+      <table className="w-full table-fixed border-collapse text-[11px] sm:text-xs xl:text-sm">
+        <colgroup>
+          <col className="w-10 xl:w-12" />
+          <col className="w-[13%]" />
+          <col className="w-[10%]" />
+          <col className="w-[10%]" />
+          <col className="w-[18%]" />
+          <col className="w-[24%]" />
+          <col className="w-[8%]" />
+          <col className="w-[7%]" />
+          <col className="w-[10%]" />
+        </colgroup>
+        <thead className="sticky top-0 z-10 bg-white text-xs font-normal uppercase text-slate-500 shadow-sm">
           <tr>
-            <Th>Начало</Th>
-            <Th>Окончание</Th>
-            <Th>Статус</Th>
-            <Th>Структура</Th>
-            <Th>Операция</Th>
-            <Th numeric>Персонал</Th>
+            <Th>{""}</Th>
+            <Th short="Стат.">Статус</Th>
+            <Th short="Нач.">Начало</Th>
+            <Th short="Окон.">Окончание</Th>
+            <Th short="Терр.">Территория</Th>
+            <Th short="Опер.">Операция</Th>
+            <Th numeric short="Перс.">Персонал</Th>
             <Th numeric>Штат</Th>
-            <Th numeric>Аутсорсинг</Th>
+            <Th numeric short="Аутс.">Аутсорсинг</Th>
           </tr>
         </thead>
         <tbody>
@@ -377,6 +514,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const rows = operations.filter((operation) => operation.plan_id === plan.id);
             const editAccess = editAccessForPlan(access, plan, kind);
             const displayStatus = displayPlanStatus(plan, kind, access);
+            const rowSendKind = sendKindForPlan(editAccess, plan);
             const collapsed = collapsedPlanIds.has(plan.id);
             const canCollapse = rows.length > 0;
             const planRequired = rows.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -386,17 +524,38 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const planRow = (
               <tr
                 key={`${plan.id}-plan`}
-                className={`border-t-2 border-slate-300 bg-slate-50 hover:bg-emerald-50/60 ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
-                onClick={() => {
+                className={`border-t-2 border-slate-300 bg-emerald-50/40 hover:bg-emerald-50 ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
+                onClick={(event) => {
+                  event.stopPropagation();
                   setSelectedPlanId(plan.id);
                   setSelectedOperationId("");
                 }}
+                onDoubleClick={() => togglePlanCollapsed(plan.id)}
               >
                 <Td>
-                  <div className="flex items-center justify-center gap-1">
+                  <button
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-refGreen text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    type="button"
+                    disabled={!rowSendKind}
+                    title="Отправить план"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void sendPlan(plan);
+                    }}
+                  >
+                    <Send size={16} />
+                  </button>
+                </Td>
+                <Td className="text-left">
+                  <span className={`inline-flex max-w-full items-center rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 ring-slate-200 xl:px-2.5 xl:text-xs ${statusTone(displayStatus)}`}>
+                    <span className="truncate">{displayStatus}</span>
+                  </span>
+                </Td>
+                <Td>
+                  <div className="flex min-w-0 items-center justify-center gap-1">
                     {canCollapse ? (
                       <button
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-white hover:text-refGreen"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-white hover:text-refGreen"
                         type="button"
                         title={collapsed ? "Развернуть" : "Свернуть"}
                         onClick={(event) => {
@@ -407,25 +566,25 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                         {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                       </button>
                     ) : (
-                      <span className="h-7 w-7 shrink-0" />
+                      <span className="h-6 w-6 shrink-0" />
                     )}
                     <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
                   </div>
                 </Td>
                 <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
-                <Td><span className={`font-normal ${statusTone(displayStatus)}`}>{displayStatus}</span></Td>
-                <Td><span className="font-normal text-refDark">План</span></Td>
-                <Td><span className="font-normal text-slate-500">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></Td>
-                <Td numeric>{planRequired}</Td>
-                <Td numeric>{planStaff}</Td>
-                <Td numeric>{planOutsource}</Td>
+                <Td>{""}</Td>
+                <Td className="text-left"><span className="inline-flex max-w-full rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none text-slate-600 ring-1 ring-slate-200 xl:px-2.5 xl:text-xs"><span className="truncate">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></span></Td>
+                <Td numeric className="font-normal text-refDark">{planRequired}</Td>
+                <Td numeric className="font-normal text-refDark">{planStaff}</Td>
+                <Td numeric className="font-normal text-refDark">{planOutsource}</Td>
               </tr>
             );
             const operationRows = collapsed ? [] : rows.map((operation) => (
               <tr
                 key={`${plan.id}-${operation.id}`}
                 className={`border-t border-slate-100 bg-white hover:bg-emerald-50/30 ${selectedPlanId === plan.id && selectedOperationId === operation.id ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : "border-l-4 border-l-transparent"}`}
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   setSelectedPlanId(plan.id);
                   setSelectedOperationId(operation.id);
                 }}
@@ -433,8 +592,9 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 <Td>{""}</Td>
                 <Td>{""}</Td>
                 <Td>{""}</Td>
-                <Td><div className="flex justify-center"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></div></Td>
-                <Td><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
+                <Td>{""}</Td>
+                <Td className="text-left"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
+                <Td className="text-left"><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
                 <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
                 <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
                 <Td numeric>{calculateOutsource(operation.required_staff, operation.staff_count)}</Td>
@@ -446,6 +606,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
         <tfoot className="sticky bottom-0 bg-slate-100 font-normal text-refDark">
           <tr className="border-t-2 border-slate-300">
             <Td>Итого</Td>
+            <Td>{""}</Td>
             <Td>{""}</Td>
             <Td>{""}</Td>
             <Td>{""}</Td>
@@ -474,7 +635,7 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
         section_id: section?.id,
         section_name: section?.name || "",
         section_order: section?.order ?? operation.section_order
-      }, "Структура сохранена");
+      }, "Территория сохранена");
     } else {
       const catalogOperation = operationCatalog.find((item) => item.id === entry.id);
       await mutate(`/operations/${operation.id}`, "PUT", {
@@ -485,17 +646,17 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
     setOpen(false);
   };
 
-  if (!editable) return <span>{label}</span>;
+  if (!editable) return <span className="block truncate">{label}</span>;
 
   return (
     <>
-      <button className="h-8 max-w-[16rem] truncate rounded bg-slate-100 px-2 text-center text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
+      <button className="h-8 w-full truncate rounded bg-slate-100 px-2 text-left text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
         {label}
       </button>
       {open && (
         <CatalogPicker
-          title={mode === "section" ? "Выбор участка" : "Выбор операции"}
-          emptyText={mode === "section" ? "Нет элементов структуры." : "Нет операций."}
+          title={mode === "section" ? "Выбор территории" : "Выбор операции"}
+          emptyText={mode === "section" ? "Нет территорий." : "Нет операций."}
           entries={entries}
           selectedId={selectedId}
           selectable={() => true}
@@ -526,7 +687,7 @@ function PlanDateInput({ value, editable, onSave }: { value: string; editable: b
   if (!editable) return <span className="font-normal">{value}</span>;
   return (
     <input
-      className="h-8 w-28 rounded border border-slate-300 px-2 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => draft !== value && onSave(draft)}
@@ -536,28 +697,53 @@ function PlanDateInput({ value, editable, onSave }: { value: string; editable: b
 
 function NumberCell({ value, editable, onSave }: { value: number; editable: boolean; onSave: (value: number) => Promise<unknown> }) {
   const [draft, setDraft] = useState(String(value ?? 0));
-  useEffect(() => setDraft(String(value ?? 0)), [value]);
+  const lastSavedRef = useRef(numberValue(value));
+  useEffect(() => {
+    const nextValue = numberValue(value);
+    setDraft(String(value ?? 0));
+    lastSavedRef.current = nextValue;
+  }, [value]);
+  const save = () => {
+    const next = numberValue(draft);
+    if (next !== lastSavedRef.current) {
+      lastSavedRef.current = next;
+      void onSave(next);
+    }
+  };
   if (!editable) return <span className="font-normal">{value ?? 0}</span>;
   return (
     <input
-      className="h-8 w-20 rounded border border-slate-300 px-2 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+      className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
       inputMode="numeric"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        const next = numberValue(draft);
-        if (next !== numberValue(value)) void onSave(next);
+      onBlur={save}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          save();
+          event.currentTarget.blur();
+        }
       }}
     />
   );
 }
 
-function Th({ children }: { children: string; numeric?: boolean }) {
-  return <th className="whitespace-nowrap border-r border-slate-200 px-2 py-2 text-center last:border-r-0">{children}</th>;
+function Th({ children, numeric, short }: { children: string; numeric?: boolean; short?: string }) {
+  return (
+    <th className={`break-words border-r border-slate-200 px-1.5 py-2 leading-tight last:border-r-0 xl:px-2 ${numeric ? "text-right" : "text-left"}`}>
+      {short ? (
+        <>
+          <span className="sm:hidden">{short}</span>
+          <span className="hidden sm:inline">{children}</span>
+        </>
+      ) : children}
+    </th>
+  );
 }
 
-function Td({ children, numeric }: { children: ReactNode; numeric?: boolean }) {
-  return <td className={`border-r border-slate-200 px-2 py-1.5 text-center align-middle font-normal last:border-r-0 ${numeric ? "tabular-nums" : ""}`}>{children}</td>;
+function Td({ children, numeric, className = "" }: { children: ReactNode; numeric?: boolean; className?: string }) {
+  return <td className={`max-w-0 overflow-hidden border-r border-slate-200 px-1.5 py-2 align-middle font-normal last:border-r-0 xl:px-2 ${numeric ? "text-right tabular-nums" : "text-center"} ${className}`}>{children}</td>;
 }
 
 function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; data: BootstrapData; mutate: BootstrapMutate; back: () => void }) {
@@ -605,7 +791,7 @@ function NewPlanDetail({ access, data, mutate, back }: { access: PlanAccess; dat
   const save = async () => {
     if (saving) return;
     if (missingSectionRows(drafts).length || missingOperationRows(drafts).length) {
-      notify("Выберите участок и операцию из справочников", "warning");
+      notify("Выберите территорию и операцию из справочников", "warning");
       return;
     }
     setSaving(true);
@@ -659,7 +845,7 @@ function PlansEmpty({ kind, data }: { kind: PlanKind; data: BootstrapData }) {
       <Empty
         title="Планов пока нет"
         text="Создайте первый план численности персонала. После отправки он уйдет в HR для заполнения штатного персонала."
-        steps={["Нажмите «План».", "Добавьте участки и операции.", "Отправьте план в HR."]}
+        steps={["Нажмите «План».", "Добавьте территории и операции.", "Отправьте план в HR."]}
       />
     );
   }
@@ -715,7 +901,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
 
   const save = async () => {
     if (editAccess.factory && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
-      notify("Выберите участок и операцию из справочников", "warning");
+      notify("Выберите территорию и операцию из справочников", "warning");
       return;
     }
     if (editAccess.factory) {
@@ -754,13 +940,13 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const send = async () => {
     if (!sendKind) return;
     if (sendKind === "factory" && (missingSectionRows(drafts).length || missingOperationRows(drafts).length)) {
-      notify("Выберите участок и операцию из справочников", "warning");
+      notify("Выберите территорию и операцию из справочников", "warning");
       return;
     }
     const invalidRows = drafts.flatMap((row) => {
       const missing: string[] = [];
       if (sendKind === "factory") {
-        if (!row.section_id) missing.push("участок");
+        if (!row.section_id) missing.push("территория");
         if (!row.operation_id) missing.push("операция");
         if (numberValue(row.required_staff) <= 0) missing.push("персонал");
       }
@@ -955,7 +1141,7 @@ function AssignmentScreen({ canEditOut, planId, operationId, data, mutate, back 
       <SectionTitle title={displayOperationName(operation.name)} count={operationAssignments.length} />
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
         <div className="grid gap-2 text-xs font-normal text-slate-600 md:grid-cols-4">
-          <Readonly label="Участок" value={displaySectionName(operation.section_name)} />
+          <Readonly label="Территория" value={displaySectionName(operation.section_name)} />
           <Readonly label="Требуется аутсорсинг" value={calculateOutsource(operation.required_staff, operation.staff_count)} />
           <Readonly label="Назначено" value={operationAssignments.length} />
           <Readonly label="Ставка/час" value={operation.rate_per_hour} />

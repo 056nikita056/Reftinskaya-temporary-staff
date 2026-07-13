@@ -29,10 +29,8 @@ npm run dev
 
 ```text
 login: admin
-password: admin12345
+password: любое значение или пусто
 ```
-
-Пароль можно переопределить переменной `SEED_ADMIN_PASSWORD`.
 
 ## Проверки
 

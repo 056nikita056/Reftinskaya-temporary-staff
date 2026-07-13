@@ -51,7 +51,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
     return (
       <div className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
         <div className="grid min-w-0 gap-2 xl:grid-cols-[minmax(11rem,1fr)_minmax(14rem,1.4fr)_6.5rem_6.5rem_6.5rem_7rem_2.5rem] xl:items-end">
-          <PlanRowField label="Структура">
+          <PlanRowField label="Территория">
             {canEditFactory ? (
               <button className="h-9 w-full min-w-0 truncate rounded border border-slate-300 bg-white px-2 text-left text-sm font-normal text-refDark outline-none transition hover:bg-emerald-50 focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" type="button" onClick={() => setPicker("section")}>
                 {row.section_id ? displaySectionName(row.section_name) : "Выбрать"}
@@ -105,8 +105,8 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
         </div>
         {picker === "section" && (
           <CatalogPicker
-            title="Выбор участка"
-            emptyText="Нет элементов структуры."
+            title="Выбор территории"
+            emptyText="Нет территорий."
             entries={sectionTree}
             selectedId={row.section_id ? `section:${row.section_id}` : ""}
             selectable={() => true}
@@ -147,7 +147,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
             <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(9rem,12rem)_1fr]">
               <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-[11px] font-normal text-slate-700 outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("section")}>
-                {row.section_id ? displaySectionName(row.section_name) : "Участок"}
+                {row.section_id ? displaySectionName(row.section_name) : "Территория"}
               </button>
               <button className="h-8 min-w-0 truncate rounded bg-slate-100 px-2 text-left text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setPicker("operation")}>
                 {row.name ? displayOperationName(row.name) : "Операция"}
@@ -199,8 +199,8 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
       )}
       {picker === "section" && (
         <CatalogPicker
-          title="Выбор участка"
-          emptyText="Нет элементов структуры."
+          title="Выбор территории"
+          emptyText="Нет территорий."
           entries={sectionTree}
           selectedId={row.section_id ? `section:${row.section_id}` : ""}
           selectable={() => true}

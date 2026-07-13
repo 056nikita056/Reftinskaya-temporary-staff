@@ -82,6 +82,13 @@ export class AuthService {
         message: "Аккаунт временно заблокирован"
       });
     }
+    if (user.passwordHash) {
+      const passwordMatches = dto.password ? await bcrypt.compare(dto.password, user.passwordHash) : false;
+      if (!passwordMatches) {
+        await this.registerFailedLogin(user.id, user.failedAttempts);
+        throw this.invalidCredentials();
+      }
+    }
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -290,7 +297,7 @@ export class AuthService {
       throw this.invalidCredentials();
     }
 
-    const oldPasswordMatches = await bcrypt.compare(dto.oldPassword, dbUser.passwordHash);
+    const oldPasswordMatches = dbUser.passwordHash ? await bcrypt.compare(dto.oldPassword, dbUser.passwordHash) : true;
     if (!oldPasswordMatches) {
       throw this.invalidCredentials();
     }

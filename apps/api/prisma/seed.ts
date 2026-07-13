@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
@@ -91,21 +90,19 @@ async function main(): Promise<void> {
   }
 
   const factory = await upsertDemoFactory();
-  const password = process.env.SEED_ADMIN_PASSWORD || "admin12345";
-  const passwordHash = await bcrypt.hash(password, 12);
   const adminUser = await prisma.user.upsert({
     where: { login: "admin" },
     update: {
       active: true,
-      mustChangePassword: true,
-      passwordHash,
+      mustChangePassword: false,
+      passwordHash: null,
       failedAttempts: 0,
       lockedUntil: null
     },
     create: {
       login: "admin",
-      passwordHash,
-      mustChangePassword: true,
+      passwordHash: null,
+      mustChangePassword: false,
       active: true
     }
   });

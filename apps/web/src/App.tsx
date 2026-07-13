@@ -322,6 +322,7 @@ export function App() {
 function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access: RoleAccess, factoryId?: string, factory?: Factory) => void }) {
   const saved = useMemo(() => readJson<{ login?: string }>(savedLoginKey, {}), []);
   const [login, setLogin] = useState(saved.login || "admin");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [passwordChange, setPasswordChange] = useState<{ oldPassword: string } | null>(null);
@@ -346,6 +347,7 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
       return;
     }
     localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
+    setPassword("");
     onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id, result.user?.factory || result.factory);
   };
 
@@ -354,7 +356,7 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
     setError("");
     setSubmitting(true);
     try {
-      const result = await api.login(login);
+      const result = await api.login(login, password);
       startSession(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось войти");
@@ -401,6 +403,7 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
       const nextRoles = result.user?.roles?.length ? [...result.user.roles] : result.roles?.length ? [...result.roles] : pending.roles;
       const nextAccess = result.user?.access || result.permissions || pending.access;
       localStorage.setItem(savedLoginKey, JSON.stringify({ login }));
+      setPassword("");
       onLogin(nextRole, nextRoles, nextAccess, result.user?.factoryId || result.factory?.id || factory.id, result.user?.factory || result.factory || factory);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось выбрать фабрику");
@@ -461,7 +464,11 @@ function Login({ onLogin }: { onLogin: (role: RoleKey, roles: RoleKey[], access:
         <form className="space-y-3" onSubmit={submit}>
           <label className="block">
             <span className="mb-1 block text-xs font-normal text-slate-500">Логин</span>
-            <input className="field" value={login} onChange={(event) => setLogin(event.target.value)} placeholder="admin" />
+            <input className="field" value={login} onChange={(event) => setLogin(event.target.value)} placeholder="admin" autoComplete="username" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-normal text-slate-500">Пароль</span>
+            <input className="field" value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
           </label>
           {error && <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm font-normal text-red-700">{error}</p>}
           <button className="btn-primary w-full" type="submit" disabled={submitting}>{submitting ? "Входим..." : "Войти"}</button>
