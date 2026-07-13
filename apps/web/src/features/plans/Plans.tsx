@@ -458,8 +458,8 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
   };
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" onClick={clearSelection}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 p-2" onClick={(event) => event.stopPropagation()}>
+    <div className="rounded-lg border border-slate-300 bg-white shadow-sm" onClick={clearSelection}>
+      <div className="sticky top-[57px] z-20 flex flex-wrap items-center justify-between gap-2 rounded-t-lg border-b border-slate-200 bg-slate-50/95 p-2 shadow-sm backdrop-blur lg:top-0" onClick={(event) => event.stopPropagation()}>
         <div className="min-w-0">
           <p className="text-xs font-normal uppercase text-slate-500">Выбранный план</p>
           <p className="truncate text-sm font-normal text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
@@ -483,7 +483,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           </ToolbarAction>
         </div>
       </div>
-      <div className="overflow-hidden" onClick={clearSelection}>
+      <div className="overflow-hidden rounded-b-lg" onClick={clearSelection}>
       <table className="w-full table-fixed border-collapse text-[11px] sm:text-xs xl:text-sm">
         <colgroup>
           <col className="w-10 xl:w-12" />
