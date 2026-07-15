@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { CatalogPicker, PlanOperationCard, buildOperationTree, buildSectionTree, type PickerEntry, type PlanEditAccess } from "./PlanOperationCard";
 import { ChevronDown, ChevronRight, Copy, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
-import type { Assignment, BootstrapData, Employee, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
+import type { Assignment, BootstrapData, Employee, MutationDelta, Operation, OperationCatalogItem, Plan, RoleAccess, RoleKey, Section } from "../../api/client";
 import type { BootstrapMutate, PlanKind, ToastTone, ViewState } from "../../domain/types";
 import { calculateOutsource, canEditPlan, defaultEndRu, displayEmployeeMeta, displayEmployeeName, displayOperationName, displayPlanStatusForRole, displaySectionName, internalPlanStatusLabel, numberValue, operationGroups, planApprovalText, planPeriod, planStatusCode, statusTone, todayRu } from "../../domain/display";
 import { Empty, Modal, Readonly, SectionTitle } from "../../components/common";
@@ -60,6 +60,26 @@ function createNewPlanDraft(): NewPlanDraft {
     dates: { start_date: todayRu(), end_date: defaultEndRu() },
     operations: []
   };
+}
+
+function orderPlanRows(rows: Operation[], topOperationIds: string[]) {
+  if (!topOperationIds.length) return rows;
+  const topIndex = new Map(topOperationIds.map((id, index) => [id, index]));
+  return [...rows].sort((left, right) => {
+    const leftIndex = topIndex.get(left.id);
+    const rightIndex = topIndex.get(right.id);
+    if (leftIndex !== undefined && rightIndex !== undefined) return leftIndex - rightIndex;
+    if (leftIndex !== undefined) return -1;
+    if (rightIndex !== undefined) return 1;
+    return 0;
+  });
+}
+
+function operationFromMutationResult(result: Awaited<ReturnType<BootstrapMutate>>): Operation | null {
+  if (!result || !("resource" in result) || result.resource !== "operations") return null;
+  const data = (result as unknown as MutationDelta).data;
+  if (!data || typeof data !== "object" || !("id" in data) || typeof data.id !== "string") return null;
+  return data as Operation;
 }
 
 function planAccessForPermissions(access: RoleAccess): PlanAccess {
@@ -343,6 +363,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   const [copiedItem, setCopiedItem] = useState<CopiedPlanTableItem | null>(null);
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const [operationSearchByPlan, setOperationSearchByPlan] = useState<Record<string, string>>({});
+  const [topOperationIdsByPlan, setTopOperationIdsByPlan] = useState<Record<string, string[]>>({});
   const [contextMenu, setContextMenu] = useState<PlanContextMenu | null>(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [actionHistory, setActionHistory] = useState<string[]>([]);
@@ -387,6 +408,19 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     setSelectedPlanIds(new Set([createdPlanId]));
     setSelectedOperationId("");
   }, [createdPlanId, plans]);
+  useEffect(() => {
+    const visibleOperationIds = new Set(operations.map((operation) => operation.id));
+    setTopOperationIdsByPlan((current) => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [planId, ids] of Object.entries(current)) {
+        const visibleIds = ids.filter((id) => visibleOperationIds.has(id));
+        if (visibleIds.length) next[planId] = visibleIds;
+        if (visibleIds.length !== ids.length) changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [operations]);
   const togglePlanCollapsed = (planId: string) => {
     setCollapsedPlanIds((current) => {
       const next = new Set(current);
@@ -444,7 +478,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     setSelectedPlanIds(new Set([planId]));
     setSelectedOperationId(operationId);
     setContextMenu(null);
-    const planRows = operations.filter((operation) => operation.plan_id === planId);
+    const planRows = orderPlanRows(operations.filter((operation) => operation.plan_id === planId), topOperationIdsByPlan[planId] || []);
     if (event.shiftKey && selectedOperationId) {
       const from = planRows.findIndex((operation) => operation.id === selectedOperationId);
       const to = planRows.findIndex((operation) => operation.id === operationId);
@@ -480,7 +514,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       notify("Для добавления строки нужны активные территории и операции в справочниках.", "warning");
       return;
     }
-    return save("/operations", "POST", {
+    const result = await save("/operations", "POST", {
       plan_id: plan.id,
       section_id: section.id,
       operation_id: catalogOperation.id,
@@ -490,6 +524,17 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       outsource_count: source ? calculateOutsource(source.required_staff, source.staff_count) : 0,
       rate_per_hour: source ? numberValue(source.rate_per_hour, 300) : 300
     }, source ? "Строка продублирована" : "Строка добавлена");
+    const created = operationFromMutationResult(result);
+    if (created) {
+      setTopOperationIdsByPlan((current) => ({
+        ...current,
+        [created.plan_id]: [created.id, ...(current[created.plan_id] || []).filter((id) => id !== created.id)]
+      }));
+      setSelectedPlanId(created.plan_id);
+      setSelectedOperationId(created.id);
+      setSelectedOperationIds(new Set([created.id]));
+    }
+    return result;
   };
   const canDropOperationToPlan = (operationId: string, targetPlan: Plan) => {
     const operation = operations.find((row) => row.id === operationId);
@@ -729,7 +774,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           selectPlan(next.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
           return;
         }
-        const planRows = operations.filter((operation) => operation.plan_id === selectedPlan.id);
+        const planRows = orderPlanRows(operations.filter((operation) => operation.plan_id === selectedPlan.id), topOperationIdsByPlan[selectedPlan.id] || []);
         if (!planRows.length) return;
         const currentIndex = selectedOperationId ? planRows.findIndex((operation) => operation.id === selectedOperationId) : -1;
         const nextIndex = event.key === "ArrowDown"
@@ -809,7 +854,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
         </thead>
         <tbody>
           {plans.flatMap((plan) => {
-            const planRows = operations.filter((operation) => operation.plan_id === plan.id);
+            const planRows = orderPlanRows(operations.filter((operation) => operation.plan_id === plan.id), topOperationIdsByPlan[plan.id] || []);
             const operationSearch = operationSearchByPlan[plan.id] || "";
             const normalizedOperationSearch = operationSearch.trim().toLowerCase();
             const rows = normalizedOperationSearch
@@ -914,7 +959,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                   />
                 </Td>
                 <Td className="text-left">
-                  <span className={`inline-flex max-w-full rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 xl:px-2.5 xl:text-xs ${invalidCount ? "text-orange-700 ring-orange-200" : "text-slate-600 ring-slate-200"}`}>
+                  <span className={`inline-flex max-w-full rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 xl:px-2.5 xl:text-xs ${invalidCount ? "text-red-700 ring-red-300" : "text-slate-600 ring-slate-200"}`}>
                     <span className="truncate">{planRows.length ? `Записей: ${planRows.length}${invalidCount ? ` · проверить: ${invalidCount}` : ""}` : "Нет записей"}</span>
                   </span>
                 </Td>
@@ -930,7 +975,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 return (
               <tr
                 key={`${plan.id}-${operation.id}`}
-                className={`border-t border-slate-100 hover:bg-emerald-50/30 ${issues.length ? "bg-orange-50/70" : "bg-white"} ${draggedOperationId === operation.id ? "opacity-50" : ""} ${selected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : "border-l-4 border-l-transparent"}`}
+                className={`border-t border-slate-100 ${issues.length ? "bg-red-100 hover:bg-red-100" : "bg-white hover:bg-emerald-50/30"} ${draggedOperationId === operation.id ? "opacity-50" : ""} ${selected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : issues.length ? "border-l-4 border-l-red-500" : "border-l-4 border-l-transparent"}`}
                 title={issues.join(", ")}
                 draggable={editAccess.factory}
                 onDragStart={(event) => {

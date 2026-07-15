@@ -24,6 +24,11 @@ type CompatStore = {
 };
 
 type PersistedResource = "assignments" | "reservations" | "housingDorms" | "facts" | "explanations";
+type AuditSnapshot = {
+  resourceTitle: string;
+  objectLabel?: string;
+  values: Record<string, unknown>;
+};
 type EmployeeWriteData = {
   fullName?: string;
   country?: string | null;
@@ -145,39 +150,52 @@ export class CompatController {
 
     if (resource === "plans") {
       const created = await this.createPlan(user, body);
+      await this.auditMutation("POST", resource, user, created.id);
       return created;
     }
 
     if (resource === "sections") {
-      return this.createSection(user.factoryId, body);
+      const created = await this.createSection(user.factoryId, body);
+      await this.auditMutation("POST", resource, user, created.id);
+      return created;
     }
 
     if (resource === "operationCatalog") {
-      return this.createOperationCatalogItem(body);
+      const created = await this.createOperationCatalogItem(body);
+      await this.auditMutation("POST", resource, user, created.id);
+      return created;
     }
 
     if (resource === "operations") {
-      return this.createPlanOperation(user.factoryId, body);
+      const created = await this.createPlanOperation(user.factoryId, body);
+      await this.auditMutation("POST", resource, user, created.id);
+      return created;
     }
 
     if (resource === "employees") {
-      return this.createEmployee(body);
+      const created = await this.createEmployee(body);
+      await this.auditMutation("POST", resource, user, created.id);
+      return created;
     }
 
     if (isDictionaryResource(resource)) {
-      return this.createDictionaryItem(user.factoryId, resource, body);
+      const created = await this.createDictionaryItem(user.factoryId, resource, body);
+      await this.auditMutation("POST", resource, user, created.id);
+      return created;
     }
 
     if (resource === "facts") {
       const fact = upsertFact(store, body, user.factoryId);
       await this.persistCompatRecord(user.factoryId, resource, fact.id, fact);
-      return {
+      const delta: MutationDelta = {
         ok: true,
         action: "upserted",
         resource,
         id: fact.id,
         data: fact
       };
+      await this.auditMutation("POST", resource, user, delta.id);
+      return delta;
     }
 
     if (resource === "settings") {
@@ -192,26 +210,30 @@ export class CompatController {
       const data = { id, factory_id: user.factoryId, ...body, side };
       store.explanations.set(id, data);
       await this.persistCompatRecord(user.factoryId, resource, id, data);
-      return {
+      const delta: MutationDelta = {
         ok: true,
         action: "created",
         resource,
         id,
         data
       };
+      await this.auditMutation("POST", resource, user, delta.id);
+      return delta;
     }
 
     const id = stringValue(body.id) ?? randomUUID();
     const data = { id, factory_id: user.factoryId, ...body };
     collectionFor(store, resource).set(id, data);
     await this.persistCompatRecord(user.factoryId, resource, id, data);
-    return {
+    const delta: MutationDelta = {
       ok: true,
       action: "created",
       resource,
       id,
       data
     };
+    await this.auditMutation("POST", resource, user, delta.id);
+    return delta;
   }
 
   @Put(":resource/:id")
@@ -228,24 +250,31 @@ export class CompatController {
     const roles = await this.requireCurrentRoles(user.sub);
     requireMutationAccess(roles, resource, "PUT", body, store);
     this.logMutation("PUT", resource, user, id, body);
-    if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles, user.role);
-    if (resource === "sections") return this.updateSection(user.factoryId, id, body);
-    if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
-    if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body, roles);
-    if (resource === "employees") return this.updateEmployee(id, body);
-    if (isDictionaryResource(resource)) return this.updateDictionaryItem(user.factoryId, resource, id, body);
+    if (resource === "plans") {
+      const previous = await this.planAuditSnapshot(user.factoryId, id);
+      return this.withAudit("PUT", resource, user, await this.updatePlan(user.factoryId, id, body, roles, user.role), id, body, previous);
+    }
+    if (resource === "sections") return this.withAudit("PUT", resource, user, await this.updateSection(user.factoryId, id, body), id);
+    if (resource === "operationCatalog") return this.withAudit("PUT", resource, user, await this.updateOperationCatalogItem(id, body), id);
+    if (resource === "operations") {
+      const previous = await this.operationAuditSnapshot(user.factoryId, id);
+      return this.withAudit("PUT", resource, user, await this.updatePlanOperation(user.factoryId, id, body, roles), id, body, previous);
+    }
+    if (resource === "employees") return this.withAudit("PUT", resource, user, await this.updateEmployee(id, body), id);
+    if (isDictionaryResource(resource)) return this.withAudit("PUT", resource, user, await this.updateDictionaryItem(user.factoryId, resource, id, body), id);
     const collection = collectionFor(store, resource);
     const existing = requireExisting(collection, id, resource);
     const data = { ...existing, ...body, id };
     collection.set(id, data);
     await this.persistCompatRecord(user.factoryId, resource, id, data);
-    return {
+    const delta: MutationDelta = {
       ok: true,
       action: "updated",
       resource,
       id,
       data
     };
+    return this.withAudit("PUT", resource, user, delta, id);
   }
 
   @Put(":resource")
@@ -263,12 +292,13 @@ export class CompatController {
     this.logMutation("PUT", resource, user, undefined, body);
     store.settings = { ...store.settings, ...body };
     await this.persistCompatRecord(user.factoryId, resource, settingsRecordId, store.settings);
-    return {
+    const delta: MutationDelta = {
       ok: true,
       action: "updated",
       resource,
       data: store.settings
     };
+    return this.withAudit("PUT", resource, user, delta, settingsRecordId);
   }
 
   @Delete(":resource/:id")
@@ -284,22 +314,23 @@ export class CompatController {
     await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "DELETE", {}, store);
     this.logMutation("DELETE", resource, user, id);
-    if (resource === "plans") return this.deletePlan(user.factoryId, id);
-    if (resource === "sections") return this.deleteSection(user.factoryId, id);
-    if (resource === "operationCatalog") return this.deleteOperationCatalogItem(id);
-    if (resource === "operations") return this.deletePlanOperation(user.factoryId, id);
-    if (resource === "employees") return this.deleteEmployee(id);
-    if (isDictionaryResource(resource)) return this.deleteDictionaryItem(user.factoryId, resource, id);
+    if (resource === "plans") return this.withAudit("DELETE", resource, user, await this.deletePlan(user.factoryId, id), id);
+    if (resource === "sections") return this.withAudit("DELETE", resource, user, await this.deleteSection(user.factoryId, id), id);
+    if (resource === "operationCatalog") return this.withAudit("DELETE", resource, user, await this.deleteOperationCatalogItem(id), id);
+    if (resource === "operations") return this.withAudit("DELETE", resource, user, await this.deletePlanOperation(user.factoryId, id), id);
+    if (resource === "employees") return this.withAudit("DELETE", resource, user, await this.deleteEmployee(id), id);
+    if (isDictionaryResource(resource)) return this.withAudit("DELETE", resource, user, await this.deleteDictionaryItem(user.factoryId, resource, id), id);
     const collection = collectionFor(store, resource);
     requireExisting(collection, id, resource);
     collection.delete(id);
     await this.deleteCompatRecord(user.factoryId, resource, id);
-    return {
+    const delta: MutationDelta = {
       ok: true,
       action: "deleted",
       resource,
       id
     };
+    return this.withAudit("DELETE", resource, user, delta, id);
   }
 
   private async loadPlanData(factoryId: string) {
@@ -313,7 +344,7 @@ export class CompatController {
               territory: true,
               operation: true
             },
-            orderBy: { id: "asc" }
+            orderBy: [{ createdAt: "desc" }, { id: "asc" }]
           }
         },
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }]
@@ -356,6 +387,76 @@ export class CompatController {
       factoryId: user.factoryId,
       bodyKeys: body ? Object.keys(body) : []
     });
+  }
+
+  private async withAudit(method: "POST" | "PUT" | "DELETE", resource: MutationResource, user: AccessTokenPayload, delta: MutationDelta, fallbackId?: string, body?: Record<string, unknown>, previous?: AuditSnapshot): Promise<MutationDelta> {
+    await this.auditMutation(method, resource, user, delta.id ?? fallbackId, body, previous, auditSnapshotFromDelta(resource, delta));
+    return delta;
+  }
+
+  private async auditMutation(method: "POST" | "PUT" | "DELETE", resource: MutationResource, user: AccessTokenPayload, id?: string, body?: Record<string, unknown>, previous?: AuditSnapshot, next?: AuditSnapshot): Promise<void> {
+    const cellResource = method === "PUT" && isPlanCellResource(resource) ? resource : undefined;
+    const cellBody = cellResource ? body : undefined;
+    const entries = cellResource && cellBody
+      ? Object.keys(cellBody).map((field) => readablePlanCellAuditEntry(cellResource, field, cellBody[field], previous, next))
+      : [readableAuditEntry(method, resource, previous ?? next)];
+    await this.prisma.auditLog.createMany({
+      data: entries.map((entry) => ({
+        factoryId: user.factoryId,
+        userId: user.sub,
+        action: entry.action,
+        entity: resource,
+        entityId: isUuid(id) ? id : null,
+        details: entry.details
+      }))
+    }).catch((error) => this.logger.warn({ event: "audit_log_failed", error: error instanceof Error ? error.message : String(error), resource, id }));
+  }
+
+  private async planAuditSnapshot(factoryId: string, id: string): Promise<AuditSnapshot | undefined> {
+    const plan = await this.prisma.plan.findFirst({
+      where: { id, factoryId },
+      include: { status: true }
+    });
+    if (!plan) return undefined;
+    return {
+      resourceTitle: auditResourceTitle("plans"),
+      objectLabel: `План ${formatApiDate(plan.startDate)} - ${formatApiDate(plan.endDate)}`,
+      values: {
+        start_date: formatApiDate(plan.startDate),
+        end_date: formatApiDate(plan.endDate),
+        status: plan.status.title,
+        status_code: plan.status.code
+      }
+    };
+  }
+
+  private async operationAuditSnapshot(factoryId: string, id: string): Promise<AuditSnapshot | undefined> {
+    const operation = await this.prisma.planOperation.findFirst({
+      where: { id, plan: { factoryId } },
+      include: {
+        plan: true,
+        territory: true,
+        operation: true
+      }
+    });
+    if (!operation) return undefined;
+    const staffCount = operation.staffCount ?? 0;
+    return {
+      resourceTitle: auditResourceTitle("operations"),
+      objectLabel: operationAuditLabel(operation),
+      values: {
+        plan_id: `План ${formatApiDate(operation.plan.startDate)} - ${formatApiDate(operation.plan.endDate)}`,
+        section_id: operation.territory?.name ?? "не заполнено",
+        section_name: operation.territory?.name ?? "не заполнено",
+        operation_id: operation.operation?.name ?? "не заполнено",
+        name: operation.operation?.name ?? "не заполнено",
+        required_staff: operation.requiredCount,
+        staff_count: staffCount,
+        outsource_count: operation.outsourcingCount ?? Math.max(operation.requiredCount - staffCount, 0),
+        hours_per_day: 8,
+        rate_per_hour: Number(operation.hourlyPay ?? 0)
+      }
+    };
   }
 
   private async loadEmployees(factoryId: string): Promise<BootstrapData["employees"]> {
@@ -1656,6 +1757,210 @@ function actionForFactSide(side: "factory" | "out"): AccessAction {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isPlanCellResource(resource: MutationResource): resource is "plans" | "operations" {
+  return resource === "plans" || resource === "operations";
+}
+
+function normalizeAuditValue(value: unknown): string | number | boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  return JSON.stringify(value);
+}
+
+function readableAuditEntry(method: "POST" | "PUT" | "DELETE", resource: MutationResource, snapshot?: AuditSnapshot) {
+  const resourceTitle = snapshot?.resourceTitle ?? auditResourceTitle(resource);
+  const actionByMethod = {
+    POST: `Создано: ${resourceTitle}`,
+    PUT: `Изменено: ${resourceTitle}`,
+    DELETE: `Удалено: ${resourceTitle}`
+  };
+  return {
+    action: actionByMethod[method].slice(0, 64),
+    details: {
+      resource,
+      resourceTitle,
+      objectLabel: snapshot?.objectLabel,
+      technicalAction: `${method} ${resource}`
+    }
+  };
+}
+
+function readablePlanCellAuditEntry(resource: "plans" | "operations", field: string, value: unknown, previous?: AuditSnapshot, next?: AuditSnapshot) {
+  const fieldLabel = auditFieldLabel(field);
+  const resourceTitle = next?.resourceTitle ?? previous?.resourceTitle ?? auditResourceTitle(resource);
+  const newValue = normalizeAuditValue(value);
+  const previousValue = normalizeAuditValue(previous?.values[field]);
+  const nextValue = normalizeAuditValue(next?.values[field] ?? value);
+  const previousValueLabel = auditValueLabel(field, previous?.values[field]);
+  const newValueLabel = auditValueLabel(field, next?.values[field] ?? value);
+  const summary = previous && previousValueLabel !== newValueLabel
+    ? `${fieldLabel}: ${previousValueLabel} → ${newValueLabel}`
+    : `${fieldLabel}: ${newValueLabel}`;
+  const action = auditCellAction(resource, field, fieldLabel);
+  return {
+    action: action.slice(0, 64),
+    details: {
+      resource,
+      resourceTitle,
+      objectLabel: next?.objectLabel ?? previous?.objectLabel,
+      field,
+      fieldLabel,
+      previousValue,
+      previousValueLabel,
+      newValue: nextValue ?? newValue,
+      newValueLabel,
+      summary,
+      reason: auditReason(field, value),
+      technicalAction: `PUT ${resource}.${field}`
+    }
+  };
+}
+
+function auditCellAction(resource: "plans" | "operations", field: string, fieldLabel: string): string {
+  if (resource === "operations" && field === "plan_id") return "Строка плана перенесена в другой план";
+  if (resource === "plans" && (field === "status" || field === "status_code")) return "Изменён статус плана";
+  return `${auditResourceTitle(resource)}: изменено поле «${fieldLabel}»`;
+}
+
+function auditFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    start_date: "Дата начала",
+    end_date: "Дата окончания",
+    status: "Статус",
+    status_code: "Статус",
+    owner_role: "Ответственный",
+    title: "Название",
+    plan_id: "План",
+    section_id: "Территория",
+    section_name: "Территория",
+    operation_id: "Операция",
+    name: "Операция",
+    required_staff: "Требуется персонала",
+    staff_count: "Закрыто штатными",
+    outsource_count: "Требуется аутсорсинг",
+    hours_per_day: "Часов в день",
+    rate_per_hour: "Ставка в час"
+  };
+  return labels[field] ?? field;
+}
+
+function auditResourceTitle(resource: MutationResource): string {
+  const labels: Record<string, string> = {
+    plans: "План",
+    sections: "Территория",
+    operationCatalog: "Операция в справочнике",
+    operations: "Строка плана",
+    employees: "Сотрудник",
+    assignments: "Назначение сотрудника",
+    reservations: "Бронирование жилья",
+    housingDorms: "Общежитие",
+    facts: "Факт",
+    explanations: "Пояснение",
+    settings: "Настройки",
+    employeeStatuses: "Статус сотрудника",
+    housingReservationStatuses: "Статус бронирования",
+    housingFactStatuses: "Статус проживания",
+    dormitories: "Общежитие",
+    rooms: "Комната",
+    beds: "Койко-место",
+    priceList: "Прайс-лист",
+    roomPriceList: "Прайс-лист жилья"
+  };
+  return labels[resource] ?? resource;
+}
+
+function auditValueLabel(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "не заполнено";
+  if (field === "status" || field === "status_code") return auditPlanStatusLabel(String(value));
+  if (field === "owner_role") return value === "factory" ? "Фабрика" : String(value);
+  if (field === "section_id" || field === "operation_id") return "выбрано";
+  if (field === "plan_id") return "перенесено в другой план";
+  if (typeof value === "boolean") return value ? "да" : "нет";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function auditReason(field: string, value: unknown): string | undefined {
+  if (field !== "status" && field !== "status_code") return undefined;
+  const status = String(value ?? "");
+  if (status === "rejected") return "План отклонён, причина указывается в комментарии к действию";
+  if (status === "approved") return "План согласован";
+  return undefined;
+}
+
+function auditPlanStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    draft: "В доработке у фабрики",
+    submitted_to_hr: "Отправлен в HR",
+    received_by_outsourcer: "Отправлен аутсорсеру",
+    on_approval: "На согласовании",
+    approved: "Согласован",
+    rejected: "Отклонён"
+  };
+  return labels[status] ?? status;
+}
+
+function auditSnapshotFromDelta(resource: MutationResource, delta: MutationDelta): AuditSnapshot | undefined {
+  if (!delta.data || typeof delta.data !== "object") return undefined;
+  if (resource === "plans") return planAuditSnapshotFromRecord(delta.data as BootstrapData["plans"][number]);
+  if (resource === "operations") return operationAuditSnapshotFromRecord(delta.data as BootstrapData["operations"][number]);
+  return {
+    resourceTitle: auditResourceTitle(resource),
+    values: {}
+  };
+}
+
+function planAuditSnapshotFromRecord(plan: BootstrapData["plans"][number]): AuditSnapshot {
+  return {
+    resourceTitle: auditResourceTitle("plans"),
+    objectLabel: `План ${plan.start_date} - ${plan.end_date}`,
+    values: {
+      start_date: plan.start_date,
+      end_date: plan.end_date,
+      status: plan.status,
+      status_code: plan.status_code ?? plan.status
+    }
+  };
+}
+
+function operationAuditSnapshotFromRecord(operation: BootstrapData["operations"][number]): AuditSnapshot {
+  const staffCount = numberValue(operation.staff_count);
+  return {
+    resourceTitle: auditResourceTitle("operations"),
+    objectLabel: operationAuditLabel({
+      plan: null,
+      territory: operation.section_name ? { name: operation.section_name } : null,
+      operation: operation.name ? { name: operation.name } : null
+    }),
+    values: {
+      plan_id: operation.plan_id,
+      section_id: operation.section_name || "не заполнено",
+      section_name: operation.section_name || "не заполнено",
+      operation_id: operation.name || "не заполнено",
+      name: operation.name || "не заполнено",
+      required_staff: operation.required_staff,
+      staff_count: staffCount,
+      outsource_count: operation.outsource_count,
+      hours_per_day: operation.hours_per_day,
+      rate_per_hour: operation.rate_per_hour
+    }
+  };
+}
+
+function operationAuditLabel(operation: { plan?: { startDate: Date; endDate: Date } | null; territory?: { name: string } | null; operation?: { name: string } | null }): string {
+  const parts = [
+    operation.plan ? `план ${formatApiDate(operation.plan.startDate)} - ${formatApiDate(operation.plan.endDate)}` : "",
+    operation.territory?.name ? `территория «${operation.territory.name}»` : "",
+    operation.operation?.name ? `операция «${operation.operation.name}»` : ""
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : "Строка плана";
 }
 
 function requiredString(value: unknown, code: string): string {

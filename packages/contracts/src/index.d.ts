@@ -93,6 +93,31 @@ export type AdminUserRow = {
   lastActivityAt?: string | Date | null;
 };
 
+export type AdminCreateUserInput = {
+  login: string;
+  fullName: string;
+  email?: string | null;
+  role: UserRole;
+  factoryId?: string;
+  active?: boolean;
+};
+
+export type AuditLogRow = {
+  id: string;
+  createdAt: string | Date;
+  action: string;
+  entity?: string | null;
+  entityId?: string | null;
+  userId?: string | null;
+  userLogin?: string | null;
+  userName?: string | null;
+  factoryId?: string | null;
+  factoryName?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  details?: Record<string, unknown> | null;
+};
+
 export type Block1NotificationType =
   | "planSubmitted"
   | "planApproved"

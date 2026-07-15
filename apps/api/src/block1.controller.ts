@@ -1,7 +1,7 @@
-import { BadRequestException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post, Query } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { accessForRole, USER_ROLES, type AccessAction, type AdminUserRow, type NotificationItem, type RequestFactAnalyticsData, type RequestFactAnalyticsQuery, type RequestFactAnalyticsRow, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
+import { accessForRole, USER_ROLES, type AccessAction, type AdminCreateUserInput, type AdminUserRow, type AuditLogRow, type NotificationItem, type RequestFactAnalyticsData, type RequestFactAnalyticsQuery, type RequestFactAnalyticsRow, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
 import type { Prisma } from "@prisma/client";
 
 import type { AccessTokenPayload } from "./auth/auth.types";
@@ -10,6 +10,15 @@ import { PrismaService } from "./prisma/prisma.service";
 
 const userRoleSet = new Set<string>(USER_ROLES);
 const notifications = new Map<string, NotificationItem>();
+const adminUserInclude = {
+  profile: true,
+  usersRoles: { include: { role: true } },
+  usersFactories: { include: { factory: true } },
+  auditLogs: {
+    orderBy: { createdAt: "desc" },
+    take: 1
+  }
+} satisfies Prisma.UserInclude;
 
 @ApiTags("block1")
 @ApiBearerAuth()
@@ -19,6 +28,90 @@ export class Block1Controller {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService
   ) {}
+
+  @Post("admin/users")
+  async createAdminUser(@CurrentUser() user: AccessTokenPayload, @Body() body: AdminCreateUserInput): Promise<AdminUserRow> {
+    await this.requireAction(user.sub, "admin.users.manage");
+    const login = requiredText(body.login, "LOGIN_REQUIRED", "Укажите логин").toLowerCase();
+    const fullName = requiredText(body.fullName, "FULL_NAME_REQUIRED", "Укажите ФИО");
+    const role = body.role;
+    if (!userRoleSet.has(role)) {
+      throw new BadRequestException({
+        code: "INVALID_ROLE",
+        message: "Некорректная роль"
+      });
+    }
+    const factoryId = body.factoryId || user.factoryId;
+    const [existing, roleRow, factory] = await Promise.all([
+      this.prisma.user.findUnique({ where: { login } }),
+      this.prisma.role.findUnique({ where: { code: role } }),
+      this.prisma.factory.findUnique({ where: { id: factoryId } })
+    ]);
+    if (existing) {
+      throw new BadRequestException({
+        code: "LOGIN_ALREADY_EXISTS",
+        message: "Пользователь с таким логином уже существует"
+      });
+    }
+    if (!roleRow?.active) {
+      throw new BadRequestException({
+        code: "ROLE_NOT_FOUND",
+        message: "Роль не найдена"
+      });
+    }
+    if (!factory?.active) {
+      throw new BadRequestException({
+        code: "FACTORY_NOT_FOUND",
+        message: "Фабрика не найдена"
+      });
+    }
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.user.create({
+        data: {
+          login,
+          passwordHash: null,
+          active: body.active ?? true,
+          profile: {
+            create: {
+              fullName,
+              email: body.email?.trim() || null
+            }
+          },
+          usersRoles: {
+            create: {
+              roleId: roleRow.id
+            }
+          },
+          usersFactories: {
+            create: {
+              factoryId,
+              active: true,
+              isPrimary: true
+            }
+          }
+        },
+        include: adminUserInclude
+      });
+      await tx.auditLog.create({
+        data: {
+          action: "Создан пользователь",
+          userId: user.sub,
+          factoryId,
+          entity: "users",
+          entityId: row.id,
+          details: {
+            resourceTitle: "Пользователь",
+            objectLabel: fullName,
+            summary: `Пользователь: ${fullName}`,
+            role,
+            login
+          }
+        }
+      });
+      return row;
+    });
+    return mapAdminUserRow(created);
+  }
 
   @Get("admin/users")
   async adminUsers(@CurrentUser() user: AccessTokenPayload, @Query("search") search?: string, @Query("take") rawTake?: string, @Query("skip") rawSkip?: string): Promise<AdminUserRow[]> {
@@ -36,37 +129,76 @@ export class Block1Controller {
       : undefined;
     const users = await this.prisma.user.findMany({
       where,
-      include: {
-        profile: true,
-        usersRoles: { include: { role: true } },
-        usersFactories: { include: { factory: true } },
-        auditLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 1
-        }
-      },
+      include: adminUserInclude,
       orderBy: [{ login: "asc" }],
       skip,
       take
     });
 
-    return users.map((item) => {
-      const roles = rolesForUser(item.usersRoles);
-      const membership = item.usersFactories.find((factory) => factory.isPrimary && factory.active && factory.factory.active)
-        ?? item.usersFactories.find((factory) => factory.active && factory.factory.active)
-        ?? item.usersFactories[0];
-      return {
-        id: item.id,
-        fullName: item.profile?.fullName ?? item.login,
-        login: item.login,
-        email: item.profile?.email ?? null,
-        role: roles[0] ?? "tempEmployee",
-        factoryId: membership?.factoryId ?? "",
-        factoryName: membership?.factory.name ?? "",
-        status: item.active ? "active" : "inactive",
-        lastActivityAt: item.auditLogs[0]?.createdAt ?? null
-      };
+    return users.map(mapAdminUserRow);
+  }
+
+  @Get("admin/audit-logs")
+  async auditLogs(
+    @CurrentUser() user: AccessTokenPayload,
+    @Query("search") search?: string,
+    @Query("take") rawTake?: string,
+    @Query("skip") rawSkip?: string,
+    @Query("userId") userId?: string,
+    @Query("entity") entity?: string,
+    @Query("entityId") entityId?: string,
+    @Query("factoryId") factoryId?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string
+  ): Promise<AuditLogRow[]> {
+    await this.requireAction(user.sub, "admin.users.manage");
+    const take = clampNumber(rawTake, 1, 300, 100);
+    const skip = clampNumber(rawSkip, 0, 10_000, 0);
+    const needle = search?.trim();
+    const createdAt = auditDateFilter(from, to);
+    const where: Prisma.AuditLogWhereInput = {
+      ...(userId ? { userId } : {}),
+      ...(entity ? { entity } : {}),
+      ...(entityId ? { entityId } : {}),
+      ...(factoryId ? { factoryId } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(needle
+        ? {
+            OR: [
+              { action: { contains: needle, mode: "insensitive" } },
+              { entity: { contains: needle, mode: "insensitive" } },
+              { user: { login: { contains: needle, mode: "insensitive" } } },
+              { user: { profile: { fullName: { contains: needle, mode: "insensitive" } } } },
+              { factory: { name: { contains: needle, mode: "insensitive" } } }
+            ]
+          }
+        : {})
+    };
+    const rows = await this.prisma.auditLog.findMany({
+      where,
+      include: {
+        user: { include: { profile: true } },
+        factory: true
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take
     });
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      action: row.action,
+      entity: row.entity,
+      entityId: row.entityId,
+      userId: row.userId,
+      userLogin: row.user?.login ?? null,
+      userName: row.user?.profile?.fullName ?? row.user?.login ?? null,
+      factoryId: row.factoryId,
+      factoryName: row.factory?.name ?? null,
+      ip: row.ip,
+      userAgent: row.userAgent,
+      details: row.details as Record<string, unknown> | null
+    }));
   }
 
   @Get("analytics/request-fact")
@@ -213,6 +345,29 @@ function rolesForUser(userRoles: Array<{ role: { code: string; active: boolean }
   return USER_ROLES.filter((role) => available.has(role));
 }
 
+function mapAdminUserRow(item: Prisma.UserGetPayload<{ include: typeof adminUserInclude }>): AdminUserRow {
+  const roles = rolesForUser(item.usersRoles);
+  const membership = item.usersFactories.find((factory) => factory.isPrimary && factory.active && factory.factory.active)
+    ?? item.usersFactories.find((factory) => factory.active && factory.factory.active)
+    ?? item.usersFactories[0];
+  return {
+    id: item.id,
+    fullName: item.profile?.fullName ?? item.login,
+    login: item.login,
+    email: item.profile?.email ?? null,
+    role: roles[0] ?? "tempEmployee",
+    factoryId: membership?.factoryId ?? "",
+    factoryName: membership?.factory.name ?? "",
+    status: item.active ? "active" : "inactive",
+    lastActivityAt: item.auditLogs[0]?.createdAt ?? null
+  };
+}
+
+function requiredText(value: unknown, code: string, message: string): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  throw new BadRequestException({ code, message });
+}
+
 function accessForRoles(roles: UserRole[]): RoleAccess {
   const modules = new Set<RoleAccess["modules"][number]>();
   const actions = new Set<RoleAccess["actions"][number]>();
@@ -246,6 +401,17 @@ function parseIsoDate(value: string): Date {
     });
   }
   return date;
+}
+
+function auditDateFilter(from?: string, to?: string): Prisma.DateTimeFilter | undefined {
+  const filter: Prisma.DateTimeFilter = {};
+  if (from) filter.gte = parseIsoDate(from);
+  if (to) {
+    const end = parseIsoDate(to);
+    end.setUTCDate(end.getUTCDate() + 1);
+    filter.lt = end;
+  }
+  return Object.keys(filter).length ? filter : undefined;
 }
 
 function percent(value: number, total: number): number | null {

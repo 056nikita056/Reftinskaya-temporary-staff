@@ -137,11 +137,15 @@ export class AuthService {
 
     await this.prisma.auditLog.create({
       data: {
-        action: "login",
+        action: "Пользователь вошёл в систему",
         userId: user.id,
         factoryId: primaryMembership.factoryId,
         ip: meta.ip,
-        userAgent: meta.userAgent
+        userAgent: meta.userAgent,
+        details: {
+          resourceTitle: "Вход в систему",
+          objectLabel: fullName
+        }
       }
     });
 
@@ -187,11 +191,15 @@ export class AuthService {
     const response = await this.issueLoginResponse(context);
     await this.prisma.auditLog.create({
       data: {
-        action: "select_factory",
+        action: "Пользователь выбрал фабрику",
         userId: user.sub,
         factoryId: context.payload.factoryId,
         ip: meta.ip,
-        userAgent: meta.userAgent
+        userAgent: meta.userAgent,
+        details: {
+          resourceTitle: "Выбор фабрики",
+          objectLabel: context.factory.name
+        }
       }
     });
     return response;
@@ -209,11 +217,15 @@ export class AuthService {
       }),
       this.prisma.auditLog.create({
         data: {
-          action: "logout",
+          action: "Пользователь вышел из системы",
           userId: user.sub,
           factoryId: user.factoryId,
           ip: meta.ip,
-          userAgent: meta.userAgent
+          userAgent: meta.userAgent,
+          details: {
+            resourceTitle: "Выход из системы",
+            objectLabel: user.fullName
+          }
         }
       })
     ]);

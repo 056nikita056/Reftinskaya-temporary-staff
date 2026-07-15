@@ -288,6 +288,7 @@ export function App() {
             modules={navModules}
             active={active}
             setActive={openModule}
+            logout={logout}
           />
           <section className="min-w-0 px-2 pb-24 pt-3 md:px-3 lg:px-4 lg:py-4">
             <Workspace
@@ -564,9 +565,9 @@ function PasswordChange({
   );
 }
 
-function Sidebar({ role, profile, selectedFactory, modules, active, setActive }: { role: RoleKey; profile: CurrentUserProfile | null; selectedFactory: Factory | null; modules: ModuleKey[]; active: ModuleKey; setActive: (key: ModuleKey) => void }) {
+function Sidebar({ role, profile, selectedFactory, modules, active, setActive, logout }: { role: RoleKey; profile: CurrentUserProfile | null; selectedFactory: Factory | null; modules: ModuleKey[]; active: ModuleKey; setActive: (key: ModuleKey) => void; logout: () => void }) {
   return (
-    <aside className="hidden border-r border-slate-200 bg-white px-3 py-6 lg:block">
+    <aside className="hidden min-h-[100dvh] flex-col border-r border-slate-200 bg-white px-3 py-6 lg:flex">
       <img src="/ref-logo.png" alt="REF" className="h-14 w-24 object-contain" />
       <div className="mt-5">
         <p className="text-sm font-normal text-refDark">{profile?.factoryName || selectedFactory?.name || "Рефтинская птицефабрика"}</p>
@@ -583,9 +584,13 @@ function Sidebar({ role, profile, selectedFactory, modules, active, setActive }:
           );
         })}
       </nav>
-      <div className="mt-[min(38vh,360px)] border-t border-slate-200 pt-6">
+      <div className="mt-auto border-t border-slate-200 pt-6">
         <p className="text-sm font-normal text-refDark">{profile?.fullName || "Пользователь"}</p>
         <p className="mt-1 text-xs font-normal text-slate-500">{profile?.role || role}</p>
+        <button className="mt-4 flex w-full items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-700 transition hover:bg-slate-50" onClick={logout} type="button">
+          <LogOut size={16} />
+          Выйти
+        </button>
       </div>
     </aside>
   );

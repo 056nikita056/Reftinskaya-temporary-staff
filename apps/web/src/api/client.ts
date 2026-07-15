@@ -1,5 +1,7 @@
 import type {
+  AdminCreateUserInput,
   AdminUserRow,
+  AuditLogRow,
   BootstrapData,
   BootstrapQuery,
   CurrentUserProfile,
@@ -20,7 +22,9 @@ import {
 export type {
   AccessAction,
   AccessModule,
+  AdminCreateUserInput,
   AdminUserRow,
+  AuditLogRow,
   Assignment,
   BootstrapData,
   BootstrapPageName,
@@ -433,6 +437,17 @@ export const api = {
     }
     const suffix = params.toString();
     return coreRequest<AdminUserRow[]>(`/admin/users${suffix ? `?${suffix}` : ""}`);
+  },
+  adminCreateUser(input: AdminCreateUserInput) {
+    return coreRequest<AdminUserRow>("/admin/users", { method: "POST", body: input });
+  },
+  adminAuditLogs(query: { search?: string; take?: number; skip?: number; userId?: string; entity?: string; entityId?: string; factoryId?: string; from?: string; to?: string } = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    const suffix = params.toString();
+    return coreRequest<AuditLogRow[]>(`/admin/audit-logs${suffix ? `?${suffix}` : ""}`);
   },
   async bootstrap(query: BootstrapQuery = {}) {
     await flushQueuedMutations().catch(() => undefined);

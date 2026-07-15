@@ -97,10 +97,12 @@ model PlanOperation {
   staffCount       Int?          @map("staff_count")
   outsourcingCount Int?          @map("outsourcing_count")
   hourlyPay        Decimal?      @map("hourly_pay") @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   plan             Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
   territory        TerritoryTree @relation(fields: [territoryId], references: [id], onDelete: Restrict)
   operation        Operation     @relation(fields: [operationId], references: [id], onDelete: Restrict)
 
+  @@index([planId, createdAt])
   @@index([territoryId])
   @@index([operationId])
   @@map("plan_operations")
@@ -397,6 +399,7 @@ model AuditLog {
   action    String   @db.VarChar(64)
   entity    String?  @db.VarChar(64)
   entityId  String?  @map("entity_id") @db.Uuid
+  details   Json?
   ip        String?  @db.VarChar(64)
   userAgent String?  @map("user_agent")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
