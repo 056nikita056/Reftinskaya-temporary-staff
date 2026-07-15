@@ -23,6 +23,20 @@ type NewPlanDraft = {
   operations: Operation[];
 };
 
+type CopiedPlanItem = { type: "plans"; ids: string[] };
+type CopiedOperationsItem = { type: "operations"; ids: string[] };
+type CopiedPlanTableItem = CopiedPlanItem | CopiedOperationsItem;
+type UndoAction = {
+  label: string;
+  run: () => Promise<void>;
+};
+type PlanContextMenu = {
+  x: number;
+  y: number;
+  planId: string;
+  operationId?: string;
+};
+
 function createDraftOperation(sectionOrder: number, planId = NEW_PLAN_ID): Operation {
   return {
     id: `draft-operation-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -321,13 +335,25 @@ function PlanFilterSelect({ label, value, options, onChange }: { label: string; 
 
 function PlanExcelList({ access, kind, plans, operations, assignments, sections, operationCatalog, mutate, notify, confirm, createdPlanId, clearSelectionRef }: { access: PlanAccess; kind: PlanKind; plans: Plan[]; operations: Operation[]; assignments: Assignment[]; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; notify: (message: string, tone?: ToastTone) => void; confirm: (options: { title: string; message: string; confirmLabel?: string; cancelLabel?: string; tone?: ToastTone }) => Promise<boolean>; createdPlanId?: string; clearSelectionRef?: MutableRefObject<(() => void) | null> }) {
   const [selectedPlanId, setSelectedPlanId] = useState(createdPlanId || "");
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(() => createdPlanId ? new Set([createdPlanId]) : new Set());
   const [selectedOperationId, setSelectedOperationId] = useState("");
+  const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(() => new Set());
+  const [draggedOperationId, setDraggedOperationId] = useState("");
+  const [dropPlanId, setDropPlanId] = useState("");
+  const [copiedItem, setCopiedItem] = useState<CopiedPlanTableItem | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+  const [operationSearchByPlan, setOperationSearchByPlan] = useState<Record<string, string>>({});
+  const [contextMenu, setContextMenu] = useState<PlanContextMenu | null>(null);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [actionHistory, setActionHistory] = useState<string[]>([]);
   const seenPlanIdsRef = useRef<Set<string>>(new Set(plans.map((plan) => plan.id)));
   const [collapsedPlanIds, setCollapsedPlanIds] = useState<Set<string>>(() => new Set(plans.map((plan) => plan.id).filter((id) => id !== createdPlanId)));
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
   const visibleOperations = operations.filter((operation) => visiblePlanIds.has(operation.plan_id));
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
+  const selectedPlans = plans.filter((plan) => selectedPlanIds.has(plan.id));
   const selectedOperation = operations.find((operation) => operation.id === selectedOperationId && operation.plan_id === selectedPlanId);
+  const selectedOperations = operations.filter((operation) => selectedOperationIds.has(operation.id));
   const selectedEditAccess = selectedPlan ? editAccessForPlan(access, selectedPlan, kind) : undefined;
   const selectedSendKind = selectedPlan && selectedEditAccess ? sendKindForPlan(selectedEditAccess, selectedPlan) : null;
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -345,6 +371,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     });
     if (newPlanIds[0]) {
       setSelectedPlanId(newPlanIds[0]);
+      setSelectedPlanIds(new Set([newPlanIds[0]]));
       setSelectedOperationId("");
     }
     seenPlanIdsRef.current = nextVisiblePlanIds;
@@ -357,6 +384,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       return next;
     });
     setSelectedPlanId(createdPlanId);
+    setSelectedPlanIds(new Set([createdPlanId]));
     setSelectedOperationId("");
   }, [createdPlanId, plans]);
   const togglePlanCollapsed = (planId: string) => {
@@ -372,7 +400,71 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   };
   const clearSelection = () => {
     setSelectedPlanId("");
+    setSelectedPlanIds(new Set());
     setSelectedOperationId("");
+    setSelectedOperationIds(new Set());
+    setContextMenu(null);
+  };
+  const save = async (path: string, method: "POST" | "PUT" | "DELETE", body?: unknown, message?: string) => {
+    setSaveStatus("Сохраняем...");
+    const result = await mutate(path, method, body, message);
+    setSaveStatus(result ? "Сохранено" : "Ошибка сохранения");
+    if (result && message) setActionHistory((current) => [message, ...current].slice(0, 3));
+    window.setTimeout(() => setSaveStatus(""), result ? 1200 : 2200);
+    return result;
+  };
+  const selectPlan = (planId: string, event: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {}) => {
+    setSelectedPlanId(planId);
+    setSelectedOperationId("");
+    setSelectedOperationIds(new Set());
+    setContextMenu(null);
+    if (event.shiftKey && selectedPlanId) {
+      const from = plans.findIndex((plan) => plan.id === selectedPlanId);
+      const to = plans.findIndex((plan) => plan.id === planId);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        setSelectedPlanIds(new Set(plans.slice(start, end + 1).map((plan) => plan.id)));
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedPlanIds((current) => {
+        const next = new Set(current);
+        if (next.has(planId)) next.delete(planId);
+        else next.add(planId);
+        if (!next.size) next.add(planId);
+        return next;
+      });
+      return;
+    }
+    setSelectedPlanIds(new Set([planId]));
+  };
+  const selectOperation = (planId: string, operationId: string, event: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) => {
+    setSelectedPlanId(planId);
+    setSelectedPlanIds(new Set([planId]));
+    setSelectedOperationId(operationId);
+    setContextMenu(null);
+    const planRows = operations.filter((operation) => operation.plan_id === planId);
+    if (event.shiftKey && selectedOperationId) {
+      const from = planRows.findIndex((operation) => operation.id === selectedOperationId);
+      const to = planRows.findIndex((operation) => operation.id === operationId);
+      if (from >= 0 && to >= 0) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        setSelectedOperationIds(new Set(planRows.slice(start, end + 1).map((operation) => operation.id)));
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedOperationIds((current) => {
+        const next = new Set(current);
+        if (next.has(operationId)) next.delete(operationId);
+        else next.add(operationId);
+        if (!next.size) next.add(operationId);
+        return next;
+      });
+      return;
+    }
+    setSelectedOperationIds(new Set([operationId]));
   };
   useEffect(() => {
     if (!clearSelectionRef) return;
@@ -388,7 +480,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       notify("Для добавления строки нужны активные территории и операции в справочниках.", "warning");
       return;
     }
-    await mutate("/operations", "POST", {
+    return save("/operations", "POST", {
       plan_id: plan.id,
       section_id: section.id,
       operation_id: catalogOperation.id,
@@ -398,6 +490,40 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       outsource_count: source ? calculateOutsource(source.required_staff, source.staff_count) : 0,
       rate_per_hour: source ? numberValue(source.rate_per_hour, 300) : 300
     }, source ? "Строка продублирована" : "Строка добавлена");
+  };
+  const canDropOperationToPlan = (operationId: string, targetPlan: Plan) => {
+    const operation = operations.find((row) => row.id === operationId);
+    if (!operation || operation.plan_id === targetPlan.id) return false;
+    const sourcePlan = plans.find((plan) => plan.id === operation.plan_id);
+    if (!sourcePlan) return false;
+    return editAccessForPlan(access, sourcePlan, kind).factory && editAccessForPlan(access, targetPlan, kind).factory;
+  };
+  const moveOperationToPlan = async (operationId: string, targetPlan: Plan) => {
+    if (!canDropOperationToPlan(operationId, targetPlan)) return;
+    const operation = operations.find((row) => row.id === operationId);
+    const sourcePlanId = operation?.plan_id;
+    await save(`/operations/${operationId}`, "PUT", { plan_id: targetPlan.id }, "Операция перенесена");
+    if (sourcePlanId) {
+      setUndoAction({
+        label: "Вернуть перенос",
+        run: async () => {
+          await save(`/operations/${operationId}`, "PUT", { plan_id: sourcePlanId }, "Перенос отменен");
+          setSelectedPlanId(sourcePlanId);
+          setSelectedOperationId(operationId);
+          setSelectedOperationIds(new Set([operationId]));
+        }
+      });
+    }
+    setSelectedPlanId(targetPlan.id);
+    setSelectedOperationId(operationId);
+    setSelectedOperationIds(new Set([operationId]));
+  };
+  const finishOperationDrop = async (targetPlan: Plan) => {
+    const operationId = draggedOperationId;
+    setDraggedOperationId("");
+    setDropPlanId("");
+    if (!operationId) return;
+    await moveOperationToPlan(operationId, targetPlan);
   };
   const removeOperation = async (plan: Plan, operation: Operation) => {
     const planRows = operations.filter((row) => row.plan_id === plan.id);
@@ -410,7 +536,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
         tone: "error"
       });
       if (!ok) return;
-      await mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
+      await save(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
       return;
     }
     const ok = await confirm({
@@ -421,13 +547,48 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       tone: "warning"
     });
     if (!ok) return;
-    await mutate(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
+    await save(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
   };
   const removeSelected = async () => {
     if (!selectedPlan || !selectedEditAccess?.factory) return;
+    if (selectedOperations.length > 1) {
+      const ok = await confirm({
+        title: "Удалить операции?",
+        message: `Удалить выбранные строки: ${selectedOperations.length}?`,
+        confirmLabel: "Удалить",
+        cancelLabel: "Отменить",
+        tone: "warning"
+      });
+      if (!ok) return;
+      for (const operation of selectedOperations) {
+        await save(`/operations/${operation.id}`, "DELETE", undefined, "Строка удалена");
+      }
+      setSelectedOperationId("");
+      setSelectedOperationIds(new Set());
+      return;
+    }
     if (selectedOperation) {
       await removeOperation(selectedPlan, selectedOperation);
       setSelectedOperationId("");
+      setSelectedOperationIds(new Set());
+      return;
+    }
+    if (selectedPlans.length > 1) {
+      const editablePlans = selectedPlans.filter((plan) => editAccessForPlan(access, plan, kind).factory);
+      if (editablePlans.length !== selectedPlans.length) return;
+      const ok = await confirm({
+        title: "Удалить планы?",
+        message: `Удалить выбранные планы: ${selectedPlans.length}?`,
+        confirmLabel: "Удалить",
+        cancelLabel: "Отменить",
+        tone: "error"
+      });
+      if (!ok) return;
+      for (const plan of selectedPlans) {
+        await save(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
+      }
+      setSelectedPlanId("");
+      setSelectedPlanIds(new Set());
       return;
     }
     const ok = await confirm({
@@ -438,8 +599,9 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       tone: "error"
     });
     if (!ok) return;
-    await mutate(`/plans/${selectedPlan.id}`, "DELETE", undefined, "План удален");
+    await save(`/plans/${selectedPlan.id}`, "DELETE", undefined, "План удален");
     setSelectedPlanId("");
+    setSelectedPlanIds(new Set());
     setSelectedOperationId("");
   };
   const copyPlan = async (plan: Plan) => {
@@ -448,7 +610,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       notify("В плане нет строк для копирования.", "warning");
       return;
     }
-    await mutate("/plans", "POST", {
+    return save("/plans", "POST", {
       owner_role: "factory",
       start_date: plan.start_date,
       end_date: plan.end_date,
@@ -456,6 +618,30 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
       status_code: "draft",
       operations: rows.map(operationCreatePayload)
     }, "План скопирован");
+  };
+  const copySelection = () => {
+    if (!selectedPlan) return;
+    const ids = selectedOperations.length ? selectedOperations.map((operation) => operation.id) : selectedOperation ? [selectedOperation.id] : [];
+    const planIds = selectedPlans.length ? selectedPlans.map((plan) => plan.id) : [selectedPlan.id];
+    setCopiedItem(ids.length ? { type: "operations", ids } : { type: "plans", ids: planIds });
+    notify(ids.length > 1 ? `Скопировано строк: ${ids.length}` : ids.length ? "Операция скопирована" : planIds.length > 1 ? `Скопировано планов: ${planIds.length}` : "План скопирован", "success");
+  };
+  const pasteCopiedIntoPlan = async (targetPlan: Plan) => {
+    const targetAccess = editAccessForPlan(access, targetPlan, kind);
+    if (!copiedItem) return;
+    if (copiedItem.type === "operations") {
+      if (!targetAccess.factory) return;
+      for (const id of copiedItem.ids) {
+        const source = operations.find((operation) => operation.id === id);
+        if (source) await createOperation(targetPlan, source);
+      }
+      return;
+    }
+    if (!access.factory) return;
+    for (const id of copiedItem.ids) {
+      const sourcePlan = plans.find((plan) => plan.id === id);
+      if (sourcePlan) await copyPlan(sourcePlan);
+    }
   };
   const sendPlan = async (plan: Plan) => {
     const rows = operations.filter((operation) => operation.plan_id === plan.id);
@@ -494,22 +680,95 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     const status_code = sendKind === "factory" ? "submitted_to_hr" : sendKind === "hr" ? "received_by_outsourcer" : "on_approval";
-    await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    await save(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
   };
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (isKeyboardEditTarget(event.target)) return;
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "z") {
+        if (!undoAction) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void undoAction.run().then(() => setUndoAction(null));
+        return;
+      }
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "c") {
+        if (!selectedPlan) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const ids = selectedOperations.length ? selectedOperations.map((operation) => operation.id) : selectedOperation ? [selectedOperation.id] : [];
+        const planIds = selectedPlans.length ? selectedPlans.map((plan) => plan.id) : [selectedPlan.id];
+        setCopiedItem(ids.length ? { type: "operations", ids } : { type: "plans", ids: planIds });
+        return;
+      }
+      if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "v") {
+        if (!copiedItem || !selectedPlan) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void pasteCopiedIntoPlan(selectedPlan);
+        return;
+      }
+      if (event.key === "Delete") {
+        if (!selectedPlan || !selectedEditAccess?.factory) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void removeSelected();
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (!selectedPlan) return;
+        if (!selectedOperationId) {
+          const currentIndex = plans.findIndex((plan) => plan.id === selectedPlan.id);
+          const nextIndex = event.key === "ArrowDown"
+            ? Math.min(currentIndex + 1, plans.length - 1)
+            : Math.max(currentIndex - 1, 0);
+          const next = plans[nextIndex < 0 ? 0 : nextIndex];
+          if (!next) return;
+          event.preventDefault();
+          event.stopPropagation();
+          selectPlan(next.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+          return;
+        }
+        const planRows = operations.filter((operation) => operation.plan_id === selectedPlan.id);
+        if (!planRows.length) return;
+        const currentIndex = selectedOperationId ? planRows.findIndex((operation) => operation.id === selectedOperationId) : -1;
+        const nextIndex = event.key === "ArrowDown"
+          ? Math.min(currentIndex + 1, planRows.length - 1)
+          : Math.max(currentIndex - 1, 0);
+        const next = planRows[nextIndex < 0 ? 0 : nextIndex];
+        if (!next) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectOperation(selectedPlan.id, next.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey });
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [access.factory, copiedItem, operations, plans, selectedEditAccess?.factory, selectedOperation, selectedOperationId, selectedOperations, selectedPlan, undoAction]);
   return (
     <div className="rounded-lg border border-slate-300 bg-white shadow-sm" onClick={clearSelection}>
       <div className="sticky top-[57px] z-20 flex flex-wrap items-center justify-between gap-2 rounded-t-lg border-b border-slate-200 bg-slate-50/95 p-2 shadow-sm backdrop-blur lg:top-0" onClick={(event) => event.stopPropagation()}>
         <div className="min-w-0">
           <p className="text-xs font-normal uppercase text-slate-500">Выбранный план</p>
-          <p className="truncate text-sm font-normal text-refDark">{selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}</p>
+          <p className="truncate text-sm font-normal text-refDark">
+            {selectedPlan ? planPeriod(selectedPlan) : "Не выбран"}
+            {selectedPlanIds.size > 1 && !selectedOperationIds.size ? ` · выбрано планов: ${selectedPlanIds.size}` : ""}
+            {selectedOperationIds.size > 1 ? ` · выбрано строк: ${selectedOperationIds.size}` : ""}
+            {copiedItem ? ` · в буфере: ${copiedItem.type === "plans" ? copiedItem.ids.length > 1 ? `${copiedItem.ids.length} планов` : "план" : copiedItem.ids.length}` : ""}
+            {saveStatus ? ` · ${saveStatus}` : ""}
+          </p>
+          {actionHistory.length > 0 && <p className="mt-0.5 truncate text-xs font-normal text-slate-500">{actionHistory.join(" · ")}</p>}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ToolbarAction title={allPlansCollapsed ? "Развернуть все планы" : "Свернуть все планы"} disabled={!plans.length} onClick={toggleAllPlansCollapsed}>
             {allPlansCollapsed ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             {allPlansCollapsed ? "Развернуть все" : "Свернуть все"}
           </ToolbarAction>
-          <ToolbarAction title={selectedOperation ? "Копировать запись" : "Копировать план"} disabled={!selectedPlan || !access.factory || (Boolean(selectedOperation) && !selectedEditAccess?.factory)} onClick={() => selectedPlan && (selectedOperation ? createOperation(selectedPlan, selectedOperation) : copyPlan(selectedPlan))}>
+          <ToolbarAction title={selectedOperationIds.size ? "Копировать записи" : selectedPlanIds.size > 1 ? "Копировать планы" : "Копировать план"} disabled={!selectedPlan} onClick={copySelection}>
             <Copy size={16} /> Копировать
+          </ToolbarAction>
+          <ToolbarAction title="Отменить последнее действие" disabled={!undoAction} onClick={() => undoAction && void undoAction.run().then(() => setUndoAction(null))}>
+            Отменить
           </ToolbarAction>
           <ToolbarAction title="Отправить план" primary disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
             <Send size={16} /> Отправить
@@ -517,7 +776,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           <ToolbarAction title="Добавить строку" disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={() => selectedPlan && createOperation(selectedPlan)}>
             <Plus size={16} /> Добавить
           </ToolbarAction>
-          <ToolbarAction title={selectedOperation ? "Удалить запись" : "Удалить план"} danger disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={removeSelected}>
+          <ToolbarAction title={selectedOperationIds.size ? "Удалить записи" : selectedPlanIds.size > 1 ? "Удалить планы" : "Удалить план"} danger disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={removeSelected}>
             <Trash2 size={16} /> Удалить
           </ToolbarAction>
         </div>
@@ -550,24 +809,54 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
         </thead>
         <tbody>
           {plans.flatMap((plan) => {
-            const rows = operations.filter((operation) => operation.plan_id === plan.id);
+            const planRows = operations.filter((operation) => operation.plan_id === plan.id);
+            const operationSearch = operationSearchByPlan[plan.id] || "";
+            const normalizedOperationSearch = operationSearch.trim().toLowerCase();
+            const rows = normalizedOperationSearch
+              ? planRows.filter((operation) => `${displaySectionName(operation.section_name)} ${displayOperationName(operation.name)}`.toLowerCase().includes(normalizedOperationSearch))
+              : planRows;
             const editAccess = editAccessForPlan(access, plan, kind);
             const displayStatus = displayPlanStatus(plan, kind, access);
             const rowSendKind = sendKindForPlan(editAccess, plan);
             const collapsed = collapsedPlanIds.has(plan.id);
-            const canCollapse = rows.length > 0;
-            const planRequired = rows.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
-            const planStaff = rows.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
-            const planOutsource = rows.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
-            const planSelected = selectedPlanId === plan.id && !selectedOperationId;
+            const canCollapse = planRows.length > 0;
+            const planRequired = planRows.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
+            const planStaff = planRows.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
+            const planOutsource = planRows.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
+            const invalidCount = planRows.filter((operation) => planOperationIssues(operation).length).length;
+            const planSelected = selectedPlanIds.has(plan.id) && !selectedOperationId;
+            const canDropHere = draggedOperationId && canDropOperationToPlan(draggedOperationId, plan);
             const planRow = (
               <tr
                 key={`${plan.id}-plan`}
-                className={`border-t-2 border-slate-300 bg-emerald-50/40 hover:bg-emerald-50 ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
+                className={`border-t-2 border-slate-300 bg-emerald-50/40 hover:bg-emerald-50 ${dropPlanId === plan.id ? "ring-2 ring-inset ring-refGreen" : ""} ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
+                onDragOver={(event) => {
+                  if (!canDropHere) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropPlanId(plan.id);
+                }}
+                onDragLeave={(event) => {
+                  if (!canDropHere) return;
+                  event.stopPropagation();
+                  setDropPlanId((current) => current === plan.id ? "" : current);
+                }}
+                onDrop={(event) => {
+                  if (!canDropHere) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void finishOperationDrop(plan);
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setSelectedPlanId(plan.id);
-                  setSelectedOperationId("");
+                  selectPlan(plan.id, event);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectPlan(plan.id, event);
+                  setContextMenu({ x: event.clientX, y: event.clientY, planId: plan.id });
                 }}
                 onDoubleClick={() => togglePlanCollapsed(plan.id)}
               >
@@ -607,36 +896,104 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                     ) : (
                       <span className="h-6 w-6 shrink-0" />
                     )}
-                    <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
+                    <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => save(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
                   </div>
                 </Td>
-                <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => mutate(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
-                <Td>{""}</Td>
-                <Td className="text-left"><span className="inline-flex max-w-full rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none text-slate-600 ring-1 ring-slate-200 xl:px-2.5 xl:text-xs"><span className="truncate">{rows.length ? `Записей: ${rows.length}` : "Нет записей"}</span></span></Td>
+                <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => save(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
+                <Td className="text-left">
+                  <input
+                    className="h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-2 text-xs font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
+                    value={operationSearch}
+                    placeholder="Поиск операций"
+                    onClick={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setOperationSearchByPlan((current) => ({ ...current, [plan.id]: value }));
+                    }}
+                  />
+                </Td>
+                <Td className="text-left">
+                  <span className={`inline-flex max-w-full rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 xl:px-2.5 xl:text-xs ${invalidCount ? "text-orange-700 ring-orange-200" : "text-slate-600 ring-slate-200"}`}>
+                    <span className="truncate">{planRows.length ? `Записей: ${planRows.length}${invalidCount ? ` · проверить: ${invalidCount}` : ""}` : "Нет записей"}</span>
+                  </span>
+                </Td>
                 <Td numeric className="font-normal text-refDark">{planRequired}</Td>
                 <Td numeric className="font-normal text-refDark">{planStaff}</Td>
                 <Td numeric className="font-normal text-refDark">{planOutsource}</Td>
               </tr>
             );
             const operationRows = collapsed ? [] : rows.map((operation) => (
+              (() => {
+                const issues = planOperationIssues(operation);
+                const selected = selectedOperationIds.has(operation.id);
+                return (
               <tr
                 key={`${plan.id}-${operation.id}`}
-                className={`border-t border-slate-100 bg-white hover:bg-emerald-50/30 ${selectedPlanId === plan.id && selectedOperationId === operation.id ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : "border-l-4 border-l-transparent"}`}
+                className={`border-t border-slate-100 hover:bg-emerald-50/30 ${issues.length ? "bg-orange-50/70" : "bg-white"} ${draggedOperationId === operation.id ? "opacity-50" : ""} ${selected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.24)]" : "border-l-4 border-l-transparent"}`}
+                title={issues.join(", ")}
+                draggable={editAccess.factory}
+                onDragStart={(event) => {
+                  if (!editAccess.factory) return;
+                  event.stopPropagation();
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", operation.id);
+                  setDraggedOperationId(operation.id);
+                  selectOperation(plan.id, operation.id, {});
+                }}
+                onDragEnd={() => {
+                  setDraggedOperationId("");
+                  setDropPlanId("");
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setSelectedPlanId(plan.id);
-                  setSelectedOperationId(operation.id);
+                  selectOperation(plan.id, operation.id, event);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectOperation(plan.id, operation.id, event);
+                  setContextMenu({ x: event.clientX, y: event.clientY, planId: plan.id, operationId: operation.id });
                 }}
               >
-                <Td colSpan={3} className="text-left"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
-                <Td colSpan={3} className="text-left"><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={mutate} /></Td>
-                <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
-                <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => mutate(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
+                <Td colSpan={3} className="text-left"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={save} /></Td>
+                <Td colSpan={3} className="text-left"><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={save} /></Td>
+                <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => save(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
+                <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => save(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
                 <Td numeric>{calculateOutsource(operation.required_staff, operation.staff_count)}</Td>
               </tr>
+                );
+              })()
             ));
             const addOperationRow = !collapsed && editAccess.factory ? (
-              <tr key={`${plan.id}-add-operation`} className="border-t border-dashed border-slate-200 bg-slate-50/60">
+              <tr
+                key={`${plan.id}-add-operation`}
+                className={`border-t border-dashed border-slate-200 bg-slate-50/60 ${dropPlanId === plan.id ? "ring-2 ring-inset ring-refGreen" : ""}`}
+                onDragOver={(event) => {
+                  if (!canDropHere) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropPlanId(plan.id);
+                }}
+                onDragLeave={(event) => {
+                  if (!canDropHere) return;
+                  event.stopPropagation();
+                  setDropPlanId((current) => current === plan.id ? "" : current);
+                }}
+                onDrop={(event) => {
+                  if (!canDropHere) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void finishOperationDrop(plan);
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectPlan(plan.id);
+                  setContextMenu({ x: event.clientX, y: event.clientY, planId: plan.id });
+                }}
+              >
                 <Td>{""}</Td>
                 <Td colSpan={8} className="text-left">
                   <button
@@ -649,7 +1006,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                       void createOperation(plan);
                     }}
                   >
-                    <Plus size={16} /> Добавить операцию
+                    Добавить операцию
                   </button>
                 </Td>
               </tr>
@@ -672,6 +1029,38 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
         </tfoot>
       </table>
       </div>
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-44 rounded-md border border-slate-200 bg-white p-1 text-sm font-normal shadow-panel"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button className="block w-full rounded px-3 py-2 text-left hover:bg-slate-100" type="button" onClick={() => { copySelection(); setContextMenu(null); }}>
+            Копировать
+          </button>
+          <button
+            className="block w-full rounded px-3 py-2 text-left hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+            type="button"
+            disabled={!copiedItem || !plans.find((plan) => plan.id === contextMenu.planId)}
+            onClick={() => {
+              const targetPlan = plans.find((plan) => plan.id === contextMenu.planId);
+              if (targetPlan) void pasteCopiedIntoPlan(targetPlan);
+              setContextMenu(null);
+            }}
+          >
+            Вставить
+          </button>
+          <button
+            className="block w-full rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            type="button"
+            disabled={!selectedPlan || (selectedPlans.length > 1 ? selectedPlans.some((plan) => !editAccessForPlan(access, plan, kind).factory) : !selectedEditAccess?.factory)}
+            onClick={() => { void removeSelected(); setContextMenu(null); }}
+          >
+            Удалить
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -783,6 +1172,18 @@ function NumberCell({ value, editable, onSave }: { value: number; editable: bool
       }}
     />
   );
+}
+
+function isKeyboardEditTarget(target: EventTarget | null) {
+  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || target instanceof HTMLButtonElement;
+}
+
+function planOperationIssues(operation: Operation) {
+  const issues: string[] = [];
+  if (!operation.section_id) issues.push("не выбрана территория");
+  if (!operation.operation_id && !operation.name.trim()) issues.push("не выбрана операция");
+  if (numberValue(operation.required_staff) <= 0) issues.push("не указан персонал");
+  return issues;
 }
 
 function Th({ children, numeric, short }: { children: string; numeric?: boolean; short?: string }) {

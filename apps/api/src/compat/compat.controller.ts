@@ -693,6 +693,11 @@ export class CompatController {
     const existing = await this.requirePlanOperationWithPlanStatus(factoryId, id);
     assertPlanOperationMutationStatus("PUT", body, existing.plan.status, roles);
     const data: Record<string, unknown> = {};
+    if ("plan_id" in body) {
+      const targetPlan = await this.requirePlanWithStatus(factoryId, requiredString(body.plan_id, "PLAN_REQUIRED"));
+      assertPlanStatusIn(targetPlan.status, ["draft"], "PLAN_OPERATION_TARGET_STATUS_LOCKED", "Строки можно переносить только в план со статусом «В доработке»");
+      data.planId = targetPlan.id;
+    }
     if ("section_id" in body) {
       data.territoryId = requiredString(body.section_id, "TERRITORY_REQUIRED");
       await this.requireActiveSection(factoryId, data.territoryId as string);
@@ -1581,7 +1586,7 @@ function assertPlanOperationMutationStatus(method: "POST" | "PUT" | "DELETE", bo
     return;
   }
 
-  if ("name" in body || "operation_id" in body || "section_id" in body || "section_name" in body || "required_staff" in body) {
+  if ("plan_id" in body || "name" in body || "operation_id" in body || "section_id" in body || "section_name" in body || "required_staff" in body) {
     assertPlanStatusIn(status, ["draft"], "PLAN_OPERATION_STATUS_LOCKED", "Фабричные поля строки плана можно менять только в статусе «В доработке»");
   }
   if ("staff_count" in body || "outsource_count" in body) {
@@ -1608,7 +1613,7 @@ function assertPlanStatusIn(status: { code: string; title: string }, allowedCode
 function actionsForOperationMutation(method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>): AccessAction[] {
   if (method === "POST" || method === "DELETE") return ["plans.factory.edit"];
   const actions = new Set<AccessAction>();
-  if ("name" in body || "operation_id" in body || "section_id" in body || "section_name" in body || "required_staff" in body) actions.add("plans.factory.edit");
+  if ("plan_id" in body || "name" in body || "operation_id" in body || "section_id" in body || "section_name" in body || "required_staff" in body) actions.add("plans.factory.edit");
   if ("staff_count" in body || "outsource_count" in body) actions.add("plans.hr.edit");
   if ("hours_per_day" in body || "rate_per_hour" in body) actions.add("plans.out.edit");
   if (!actions.size) actions.add("plans.edit");
