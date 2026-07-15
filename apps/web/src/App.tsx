@@ -697,7 +697,7 @@ function Workspace({
       : <Empty title="Нет доступа" text="Просмотр планов недоступен для текущего набора прав." />;
   }
   if (active === "dictionaries") {
-    return <Dictionaries data={data} mutate={mutate} canEdit={hasAction(access, "admin.users.manage")} openPlan={openPlan} />;
+    return <Dictionaries role={role} data={data} mutate={mutate} canEdit={hasAction(access, "admin.users.manage")} openPlan={openPlan} />;
   }
   if (active === "personnel") {
     return hasAction(access, "personnel.view")

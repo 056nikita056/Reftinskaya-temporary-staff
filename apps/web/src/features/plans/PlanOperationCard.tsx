@@ -11,6 +11,10 @@ export type PlanEditAccess = {
   out: boolean;
 };
 
+function numericInputValue(value: unknown) {
+  return numberValue(value) === 0 ? "" : String(value ?? 0);
+}
+
 export function PlanOperationCard({ kind, row, sections = [], operationCatalog = [], assigned = [], edit, editAccess, onChange, onOpen, onRemove }: { kind: PlanKind; row: Operation; sections?: Section[]; operationCatalog?: OperationCatalogItem[]; assigned?: string[]; edit?: boolean; editAccess?: PlanEditAccess; onChange?: (patch: Partial<Operation>) => void; onOpen?: () => void; onRemove?: () => void }) {
   const [picker, setPicker] = useState<"section" | "operation" | null>(null);
   const required = numberValue(row.required_staff);
@@ -71,14 +75,14 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </PlanRowField>
           <PlanRowField label="Персонал">
             {canEditFactory ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={numericInputValue(row.required_staff)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
             ) : (
               <ReadonlyCell align="center">{required}</ReadonlyCell>
             )}
           </PlanRowField>
           <PlanRowField label="Штат">
             {canEditHr ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={numericInputValue(row.staff_count)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
             ) : (
               <ReadonlyCell align="center">{staff}</ReadonlyCell>
             )}
@@ -88,7 +92,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           </PlanRowField>
           <PlanRowField label="Ставка">
             {canEditOut ? (
-              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} />
+              <input className="h-9 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={numericInputValue(row.rate_per_hour)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} />
             ) : (
               <ReadonlyCell align="center">{row.rate_per_hour}</ReadonlyCell>
             )}
@@ -170,12 +174,12 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
       <div className="grid grid-cols-3 overflow-hidden rounded-md border border-slate-300 bg-white text-center text-xs sm:text-sm">
         <PlanMetric label="Персонал" value={required}>
           {canEditFactory ? (
-            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.required_staff} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
+            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={numericInputValue(row.required_staff)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ required_staff: numberValue(event.target.value), outsource_count: calculateOutsource(event.target.value, row.staff_count) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Штат" value={staff}>
           {canEditHr ? (
-            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={row.staff_count} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
+            <input className="mx-auto mt-1 h-7 w-full rounded border border-slate-300 px-2 text-center text-sm font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20" inputMode="numeric" value={numericInputValue(row.staff_count)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ staff_count: numberValue(event.target.value), outsource_count: calculateOutsource(required, event.target.value) })} />
           ) : null}
         </PlanMetric>
         <PlanMetric label="Аутсорсинг" value={outsource} accent />
@@ -186,7 +190,7 @@ export function PlanOperationCard({ kind, row, sections = [], operationCatalog =
           {(kind === "out" || canEditOut) && (
             <div className="grid gap-2">
               {canEditOut ? (
-                <label className="text-[11px] font-normal text-slate-500">Ставка/час<input className="field mt-1 h-8" value={row.rate_per_hour} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} /></label>
+                <label className="text-[11px] font-normal text-slate-500">Ставка/час<input className="field mt-1 h-8" value={numericInputValue(row.rate_per_hour)} onFocus={(event) => event.currentTarget.select()} onChange={(event) => update({ rate_per_hour: numberValue(event.target.value) })} /></label>
               ) : (
                 <p>{row.rate_per_hour} руб./ч</p>
               )}

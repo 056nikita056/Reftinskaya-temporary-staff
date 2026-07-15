@@ -70,6 +70,8 @@ export function useBootstrap(enabled: boolean) {
   };
 
   const mutate: MutateBootstrap = async (path, method, body, message = method === "POST" ? "Добавлено" : method === "DELETE" ? "Удалено" : "Сохранено") => {
+    const startedAt = Date.now();
+    console.info("[mutation:start]", { method, path, bodyKeys: body && typeof body === "object" ? Object.keys(body) : [] });
     try {
       const offline = typeof navigator !== "undefined" && !navigator.onLine;
       if (offline) {
@@ -91,12 +93,14 @@ export function useBootstrap(enabled: boolean) {
       const pending = await pendingMutationCount();
       setNotice(offline ? `Нет сети: действие поставлено в очередь (${pending})` : message);
       window.setTimeout(() => setNotice(""), offline ? 3000 : 1800);
+      console.info("[mutation:success]", { method, path, durationMs: Date.now() - startedAt, offline, pending });
       return next;
     } catch (err) {
       const messageText = err instanceof Error ? err.message : "Не удалось сохранить";
       setError(messageText);
       setNotice(messageText);
       window.setTimeout(() => setNotice(""), 2600);
+      console.error("[mutation:error]", { method, path, durationMs: Date.now() - startedAt, error: messageText });
       return null;
     }
   };

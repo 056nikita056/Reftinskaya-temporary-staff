@@ -226,8 +226,19 @@ export function applyMutationDelta(current: BootstrapData, delta: MutationDelta,
     }
   }
 
-  if (delta.resource === "employees" && delta.data) {
-    next = { ...next, employees: upsertById(next.employees, delta.data as Employee) };
+  if (delta.resource === "employees") {
+    if (delta.action === "deleted" && id) {
+      next = {
+        ...next,
+        employees: next.employees.filter((employee) => employee.id !== id),
+        assignments: next.assignments.filter((assignment) => assignment.employee_id !== id),
+        reservations: next.reservations.filter((reservation) => reservation.employee_id !== id),
+        facts: next.facts.filter((fact) => fact.employee_id !== id),
+        employeeBusy: (next.employeeBusy || []).filter((busy) => busy.employee_id !== id)
+      };
+    } else if (delta.data) {
+      next = { ...next, employees: upsertById(next.employees, delta.data as Employee) };
+    }
   }
 
   if (delta.resource === "assignments") {
@@ -263,6 +274,22 @@ export function applyMutationDelta(current: BootstrapData, delta: MutationDelta,
         })
       };
     }
+  }
+
+  if (next.dictionaries && delta.resource in next.dictionaries) {
+    const resource = delta.resource as keyof NonNullable<BootstrapData["dictionaries"]>;
+    const collection = next.dictionaries[resource];
+    next = {
+      ...next,
+      dictionaries: {
+        ...next.dictionaries,
+        [resource]: delta.action === "deleted" && id
+          ? collection.filter((item) => item.id !== id)
+          : delta.data
+            ? upsertById(collection, delta.data as (typeof collection)[number])
+            : collection
+      }
+    };
   }
 
   if (delta.resource === "reservations") {

@@ -27,6 +27,7 @@ export type {
   BootstrapQuery,
   CurrentUser,
   CurrentUserProfile,
+  DictionaryItem,
   Dormitory,
   Employee,
   EmployeeBusy,

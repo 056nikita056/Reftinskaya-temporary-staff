@@ -377,6 +377,19 @@ function ReservationModal({ context, data, mutate, close }: { context: { place: 
     close();
   };
 
+  const deleteReservation = async () => {
+    if (!context.reservation) return;
+    if (!await confirm({
+      title: "Удалить бронь?",
+      message: `Удалить бронь ${draft.dorm}, ${draft.room}, ${draft.bed}?`,
+      confirmLabel: "Удалить",
+      cancelLabel: "Отменить",
+      tone: "error"
+    })) return;
+    await mutate(`/reservations/${context.reservation.id}`, "DELETE", undefined, "Бронь удалена");
+    close();
+  };
+
   return (
     <Modal title="Бронь на жилье" close={close}>
       <div className="space-y-3">
@@ -415,7 +428,7 @@ function ReservationModal({ context, data, mutate, close }: { context: { place: 
         </label>
         <Input label="Комментарий" value={draft.comment} onChange={(value) => setDraft({ ...draft, comment: value })} />
         <div className="flex justify-between gap-2">
-          {context.reservation ? <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-normal text-white" onClick={() => mutate(`/reservations/${context.reservation?.id}`, "DELETE", undefined, "Бронь удалена").then(close)}>Удалить</button> : <span />}
+          {context.reservation ? <button className="rounded-md bg-red-600 px-4 py-2 text-sm font-normal text-white" onClick={deleteReservation}>Удалить</button> : <span />}
           <div className="flex gap-2">
             <button className="rounded-md bg-slate-300 px-4 py-2 text-sm font-normal" onClick={close}>Закрыть</button>
             <button className="btn-primary" onClick={save}>{context.reservation ? "Сохранить" : "Создать"}</button>

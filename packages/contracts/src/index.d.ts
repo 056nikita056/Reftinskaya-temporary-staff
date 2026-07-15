@@ -238,6 +238,26 @@ export type HousingPlace = {
   };
 };
 
+export type DictionaryItem = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  active: boolean;
+  usageCount?: number;
+  fields?: Record<string, unknown>;
+};
+
+export type DictionariesData = {
+  employeeStatuses: DictionaryItem[];
+  housingReservationStatuses: DictionaryItem[];
+  housingFactStatuses: DictionaryItem[];
+  dormitories: DictionaryItem[];
+  rooms: DictionaryItem[];
+  beds: DictionaryItem[];
+  priceList: DictionaryItem[];
+  roomPriceList: DictionaryItem[];
+};
+
 export type Reservation = {
   id: string;
   employee_id: string;
@@ -301,6 +321,7 @@ export type BootstrapData = {
   reservations: Reservation[];
   housingDorms: Dormitory[];
   housingPlaces: HousingPlace[];
+  dictionaries?: DictionariesData;
   facts: FactEntry[];
   explanations: Explanation[];
   settings?: AppSettings;
@@ -326,7 +347,7 @@ export type BootstrapData = {
 };
 
 export type MutationAction = "created" | "updated" | "deleted" | "upserted";
-export type MutationResource = "plans" | "sections" | "operationCatalog" | "operations" | "employees" | "assignments" | "housingDorms" | "reservations" | "facts" | "explanations" | "settings";
+export type MutationResource = "plans" | "sections" | "operationCatalog" | "operations" | "employees" | "assignments" | "housingDorms" | "reservations" | "facts" | "explanations" | "settings" | "employeeStatuses" | "housingReservationStatuses" | "housingFactStatuses" | "dormitories" | "rooms" | "beds" | "priceList" | "roomPriceList";
 
 export type MutationDelta = {
   ok: true;

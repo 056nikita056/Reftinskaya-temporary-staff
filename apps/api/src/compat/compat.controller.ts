@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, NotFoundException, Param, Post, Put } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Logger, NotFoundException, Param, Post, Put } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import type { Prisma } from "@prisma/client";
 import { accessForRole, USER_ROLES, type AccessAction, type BootstrapData, type Factory, type MutationDelta, type MutationResource, type RoleAccess, type UserRole } from "@reftinskaya/contracts";
@@ -23,17 +23,54 @@ type CompatStore = {
   settings: Record<string, unknown>;
 };
 
-type PersistedResource = "employees" | "assignments" | "reservations" | "housingDorms" | "facts" | "explanations";
+type PersistedResource = "assignments" | "reservations" | "housingDorms" | "facts" | "explanations";
+type EmployeeWriteData = {
+  fullName?: string;
+  country?: string | null;
+  age?: number | null;
+  employeeStatusId?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  birthDate?: Date | null;
+  passportNo?: string | null;
+  passportIssued?: string | null;
+  registration?: string | null;
+  needsHousing?: boolean;
+  needsRegistration?: boolean;
+  driverCategories?: string | null;
+};
+type DictionaryResource =
+  | "employeeStatuses"
+  | "housingReservationStatuses"
+  | "housingFactStatuses"
+  | "dormitories"
+  | "rooms"
+  | "beds"
+  | "priceList"
+  | "roomPriceList";
+
+const dictionaryResources = new Set<DictionaryResource>([
+  "employeeStatuses",
+  "housingReservationStatuses",
+  "housingFactStatuses",
+  "dormitories",
+  "rooms",
+  "beds",
+  "priceList",
+  "roomPriceList"
+]);
 
 const compatStores = new Map<string, CompatStore>();
 const userRoleSet = new Set<string>(USER_ROLES);
 const settingsRecordId = "__settings__";
-const persistedResources = new Set<PersistedResource>(["employees", "assignments", "reservations", "housingDorms", "facts", "explanations"]);
+const persistedResources = new Set<PersistedResource>(["assignments", "reservations", "housingDorms", "facts", "explanations"]);
 
 @ApiTags("compat")
 @ApiBearerAuth()
 @Controller("compat")
 export class CompatController {
+  private readonly logger = new Logger(CompatController.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   @Get("bootstrap")
@@ -53,7 +90,12 @@ export class CompatController {
         }
       : undefined;
     const permissions = accessForRoles(roles);
-    const planData = filterPlanDataForAccess(await this.loadPlanData(user.factoryId), permissions);
+    const [rawPlanData, employees, dictionaries] = await Promise.all([
+      this.loadPlanData(user.factoryId),
+      this.loadEmployees(user.factoryId),
+      this.loadDictionaries(user.factoryId, roles)
+    ]);
+    const planData = filterPlanDataForAccess(rawPlanData, permissions);
     const store = storeFor(user.factoryId);
     await this.hydrateStore(user.factoryId, store);
 
@@ -62,12 +104,13 @@ export class CompatController {
       sections: planData.sections,
       operationCatalog: planData.operationCatalog,
       operations: planData.operations,
-      employees: values(store.employees) as BootstrapData["employees"],
+      employees,
       employeeBusy: [],
       assignments: values(store.assignments) as BootstrapData["assignments"],
       reservations: values(store.reservations) as BootstrapData["reservations"],
       housingDorms: values(store.housingDorms) as BootstrapData["housingDorms"],
       housingPlaces: [],
+      dictionaries,
       facts: values(store.facts) as BootstrapData["facts"],
       explanations: values(store.explanations) as BootstrapData["explanations"],
       settings: store.settings,
@@ -98,6 +141,7 @@ export class CompatController {
     const store = storeFor(user.factoryId);
     await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "POST", body, store);
+    this.logMutation("POST", resource, user, undefined, body);
 
     if (resource === "plans") {
       const created = await this.createPlan(user, body);
@@ -114,6 +158,14 @@ export class CompatController {
 
     if (resource === "operations") {
       return this.createPlanOperation(user.factoryId, body);
+    }
+
+    if (resource === "employees") {
+      return this.createEmployee(body);
+    }
+
+    if (isDictionaryResource(resource)) {
+      return this.createDictionaryItem(user.factoryId, resource, body);
     }
 
     if (resource === "facts") {
@@ -175,10 +227,13 @@ export class CompatController {
     await this.hydrateStore(user.factoryId, store);
     const roles = await this.requireCurrentRoles(user.sub);
     requireMutationAccess(roles, resource, "PUT", body, store);
+    this.logMutation("PUT", resource, user, id, body);
     if (resource === "plans") return this.updatePlan(user.factoryId, id, body, roles, user.role);
     if (resource === "sections") return this.updateSection(user.factoryId, id, body);
     if (resource === "operationCatalog") return this.updateOperationCatalogItem(id, body);
     if (resource === "operations") return this.updatePlanOperation(user.factoryId, id, body, roles);
+    if (resource === "employees") return this.updateEmployee(id, body);
+    if (isDictionaryResource(resource)) return this.updateDictionaryItem(user.factoryId, resource, id, body);
     const collection = collectionFor(store, resource);
     const existing = requireExisting(collection, id, resource);
     const data = { ...existing, ...body, id };
@@ -205,6 +260,7 @@ export class CompatController {
     const store = storeFor(user.factoryId);
     await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "PUT", body, store);
+    this.logMutation("PUT", resource, user, undefined, body);
     store.settings = { ...store.settings, ...body };
     await this.persistCompatRecord(user.factoryId, resource, settingsRecordId, store.settings);
     return {
@@ -227,10 +283,13 @@ export class CompatController {
     const store = storeFor(user.factoryId);
     await this.hydrateStore(user.factoryId, store);
     requireMutationAccess(await this.requireCurrentRoles(user.sub), resource, "DELETE", {}, store);
+    this.logMutation("DELETE", resource, user, id);
     if (resource === "plans") return this.deletePlan(user.factoryId, id);
     if (resource === "sections") return this.deleteSection(user.factoryId, id);
     if (resource === "operationCatalog") return this.deleteOperationCatalogItem(id);
     if (resource === "operations") return this.deletePlanOperation(user.factoryId, id);
+    if (resource === "employees") return this.deleteEmployee(id);
+    if (isDictionaryResource(resource)) return this.deleteDictionaryItem(user.factoryId, resource, id);
     const collection = collectionFor(store, resource);
     requireExisting(collection, id, resource);
     collection.delete(id);
@@ -284,6 +343,195 @@ export class CompatController {
       operationCatalog: operationCatalog.map(mapOperationCatalogItem),
       operations: plans.flatMap((plan) => plan.operations.map(mapPlanOperation))
     };
+  }
+
+  private logMutation(method: "POST" | "PUT" | "DELETE", resource: MutationResource, user: AccessTokenPayload, id?: string, body?: Record<string, unknown>): void {
+    this.logger.log({
+      event: "compat_mutation",
+      method,
+      resource,
+      id,
+      userId: user.sub,
+      role: user.role,
+      factoryId: user.factoryId,
+      bodyKeys: body ? Object.keys(body) : []
+    });
+  }
+
+  private async loadEmployees(factoryId: string): Promise<BootstrapData["employees"]> {
+    await this.importCompatEmployees(factoryId);
+    const employees = await this.prisma.employee.findMany({
+      include: { status: true },
+      orderBy: [{ fullName: "asc" }, { id: "asc" }]
+    });
+    return employees.map(mapEmployee);
+  }
+
+  private async loadDictionaries(factoryId: string, roles: UserRole[]): Promise<NonNullable<BootstrapData["dictionaries"]>> {
+    if (isFactoryPlannerOnly(roles)) return emptyDictionaries();
+    const [
+      employeeStatuses,
+      housingReservationStatuses,
+      housingFactStatuses,
+      dormitories,
+      rooms,
+      beds,
+      priceList,
+      roomPriceList
+    ] = await Promise.all([
+      this.prisma.employeeStatus.findMany({ include: { _count: { select: { employees: true } } }, orderBy: { title: "asc" } }),
+      this.prisma.housingReservationStatus.findMany({ include: { _count: { select: { reservations: true } } }, orderBy: { title: "asc" } }),
+      this.prisma.housingFactStatus.findMany({ include: { _count: { select: { facts: true } } }, orderBy: { title: "asc" } }),
+      this.prisma.dormitory.findMany({ where: { factoryId }, include: { _count: { select: { roomsDormitories: true } } }, orderBy: { name: "asc" } }),
+      this.prisma.room.findMany({ include: { roomsDormitories: { include: { dormitory: true } }, _count: { select: { beds: true, roomPrices: true } } }, orderBy: { roomNumber: "asc" } }),
+      this.prisma.bed.findMany({ include: { room: true, _count: { select: { housingReservations: true, housingFacts: true } } }, orderBy: [{ roomId: "asc" }, { bedNumber: "asc" }] }),
+      this.prisma.priceList.findMany({ include: { operation: true, section: true }, orderBy: [{ dateApplied: "desc" }, { id: "asc" }] }),
+      this.prisma.roomPriceList.findMany({ include: { room: true }, orderBy: [{ dateApplied: "desc" }, { id: "asc" }] })
+    ]);
+    return {
+      employeeStatuses: employeeStatuses.map((item) => dictionaryItem(item.id, item.title, { active: item.active, usageCount: item._count.employees })),
+      housingReservationStatuses: housingReservationStatuses.map((item) => dictionaryItem(item.id, item.title, { active: item.active, usageCount: item._count.reservations, fields: { is_final: item.isFinal ?? false } })),
+      housingFactStatuses: housingFactStatuses.map((item) => dictionaryItem(item.id, item.title, { active: item.active, usageCount: item._count.facts, fields: { is_final: item.isFinal ?? false } })),
+      dormitories: dormitories.map((item) => dictionaryItem(item.id, item.name, { subtitle: item.address, active: item.active, usageCount: item._count.roomsDormitories, fields: { address: item.address } })),
+      rooms: rooms.map((item) => {
+        const dormitory = item.roomsDormitories[0]?.dormitory;
+        return dictionaryItem(item.id, item.roomNumber, { subtitle: dormitory?.name, active: item.active, usageCount: item._count.beds + item._count.roomPrices, fields: { dormitory_id: dormitory?.id ?? "", room_number: item.roomNumber } });
+      }),
+      beds: beds.map((item) => dictionaryItem(item.id, item.bedNumber ? `${item.bedNumber}-е койко-место` : "Койко-место", { subtitle: item.room.roomNumber, active: item.active, usageCount: item._count.housingReservations + item._count.housingFacts, fields: { room_id: item.roomId, bed_number: item.bedNumber ?? 1 } })),
+      priceList: priceList.map((item) => dictionaryItem(item.id, item.operation.name, { subtitle: item.section.name, active: true, usageCount: 0, fields: { operation_id: item.operationId, section_id: item.sectionId, cost: item.cost, date_applyed: item.dateApplied ? formatApiDate(item.dateApplied) : "" } })),
+      roomPriceList: roomPriceList.map((item) => dictionaryItem(item.id, item.room.roomNumber, { active: true, usageCount: 0, fields: { room_id: item.roomId, cost: item.cost == null ? "" : Number(item.cost), date_applyed: item.dateApplied ? formatApiDate(item.dateApplied) : "" } }))
+    };
+  }
+
+  private async createDictionaryItem(factoryId: string, resource: DictionaryResource, body: Record<string, unknown>): Promise<MutationDelta> {
+    if (resource === "employeeStatuses") {
+      const created = await this.prisma.employeeStatus.create({ data: { id: stringValue(body.id) ?? randomUUID(), title: requiredString(body.title ?? body.name, "TITLE_REQUIRED"), active: body.active === undefined ? true : Boolean(body.active) }, include: { _count: { select: { employees: true } } } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.title, { active: created.active, usageCount: created._count.employees }));
+    }
+    if (resource === "housingReservationStatuses") {
+      const created = await this.prisma.housingReservationStatus.create({ data: { id: stringValue(body.id) ?? randomUUID(), title: requiredString(body.title ?? body.name, "TITLE_REQUIRED"), isFinal: Boolean(body.is_final), active: body.active === undefined ? true : Boolean(body.active) }, include: { _count: { select: { reservations: true } } } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.title, { active: created.active, usageCount: created._count.reservations, fields: { is_final: created.isFinal ?? false } }));
+    }
+    if (resource === "housingFactStatuses") {
+      const created = await this.prisma.housingFactStatus.create({ data: { id: stringValue(body.id) ?? randomUUID(), title: requiredString(body.title ?? body.name, "TITLE_REQUIRED"), isFinal: Boolean(body.is_final), active: body.active === undefined ? true : Boolean(body.active) }, include: { _count: { select: { facts: true } } } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.title, { active: created.active, usageCount: created._count.facts, fields: { is_final: created.isFinal ?? false } }));
+    }
+    if (resource === "dormitories") {
+      const created = await this.prisma.dormitory.create({ data: { id: stringValue(body.id) ?? randomUUID(), factoryId, name: requiredString(body.title ?? body.name, "TITLE_REQUIRED"), address: stringValue(body.address) ?? "", active: body.active === undefined ? true : Boolean(body.active) }, include: { _count: { select: { roomsDormitories: true } } } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.name, { subtitle: created.address, active: created.active, usageCount: created._count.roomsDormitories, fields: { address: created.address } }));
+    }
+    if (resource === "rooms") {
+      const created = await this.prisma.room.create({ data: { id: stringValue(body.id) ?? randomUUID(), roomNumber: requiredString(body.room_number ?? body.title ?? body.name, "ROOM_NUMBER_REQUIRED"), active: body.active === undefined ? true : Boolean(body.active), roomsDormitories: stringValue(body.dormitory_id) ? { create: { dormitoryId: requiredString(body.dormitory_id, "DORMITORY_REQUIRED") } } : undefined }, include: { roomsDormitories: { include: { dormitory: true } }, _count: { select: { beds: true, roomPrices: true } } } });
+      const dormitory = created.roomsDormitories[0]?.dormitory;
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.roomNumber, { subtitle: dormitory?.name, active: created.active, usageCount: created._count.beds + created._count.roomPrices, fields: { dormitory_id: dormitory?.id ?? "", room_number: created.roomNumber } }));
+    }
+    if (resource === "beds") {
+      const created = await this.prisma.bed.create({ data: { id: stringValue(body.id) ?? randomUUID(), roomId: requiredString(body.room_id, "ROOM_REQUIRED"), bedNumber: Math.trunc(numberValue(body.bed_number, 1)), active: body.active === undefined ? true : Boolean(body.active) }, include: { room: true, _count: { select: { housingReservations: true, housingFacts: true } } } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.bedNumber ? `${created.bedNumber}-е койко-место` : "Койко-место", { subtitle: created.room.roomNumber, active: created.active, usageCount: 0, fields: { room_id: created.roomId, bed_number: created.bedNumber ?? 1 } }));
+    }
+    if (resource === "priceList") {
+      const created = await this.prisma.priceList.create({ data: { id: stringValue(body.id) ?? randomUUID(), operationId: requiredString(body.operation_id, "OPERATION_REQUIRED"), sectionId: requiredString(body.section_id, "SECTION_REQUIRED"), cost: numberValue(body.cost, 0), dateApplied: optionalApiDate(body.date_applyed) ?? null }, include: { operation: true, section: true } });
+      return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.operation.name, { subtitle: created.section.name, active: true, fields: { operation_id: created.operationId, section_id: created.sectionId, cost: created.cost, date_applyed: created.dateApplied ? formatApiDate(created.dateApplied) : "" } }));
+    }
+    const created = await this.prisma.roomPriceList.create({ data: { id: stringValue(body.id) ?? randomUUID(), roomId: requiredString(body.room_id, "ROOM_REQUIRED"), cost: numberValue(body.cost, 0), dateApplied: optionalApiDate(body.date_applyed) ?? null }, include: { room: true } });
+    return dictionaryDelta("created", resource, created.id, dictionaryItem(created.id, created.room.roomNumber, { active: true, fields: { room_id: created.roomId, cost: created.cost == null ? "" : Number(created.cost), date_applyed: created.dateApplied ? formatApiDate(created.dateApplied) : "" } }));
+  }
+
+  private async updateDictionaryItem(factoryId: string, resource: DictionaryResource, id: string, body: Record<string, unknown>): Promise<MutationDelta> {
+    if (resource === "employeeStatuses") {
+      const updated = await this.prisma.employeeStatus.update({ where: { id }, data: statusDictionaryWrite(body), include: { _count: { select: { employees: true } } } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.title, { active: updated.active, usageCount: updated._count.employees }));
+    }
+    if (resource === "housingReservationStatuses") {
+      const updated = await this.prisma.housingReservationStatus.update({ where: { id }, data: finalStatusDictionaryWrite(body), include: { _count: { select: { reservations: true } } } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.title, { active: updated.active, usageCount: updated._count.reservations, fields: { is_final: updated.isFinal ?? false } }));
+    }
+    if (resource === "housingFactStatuses") {
+      const updated = await this.prisma.housingFactStatus.update({ where: { id }, data: finalStatusDictionaryWrite(body), include: { _count: { select: { facts: true } } } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.title, { active: updated.active, usageCount: updated._count.facts, fields: { is_final: updated.isFinal ?? false } }));
+    }
+    if (resource === "dormitories") {
+      await this.requireFactoryDormitory(factoryId, id);
+      const updated = await this.prisma.dormitory.update({ where: { id }, data: { ...(typeof (body.title ?? body.name) === "string" ? { name: requiredString(body.title ?? body.name, "TITLE_REQUIRED") } : {}), ...("address" in body ? { address: stringValue(body.address) ?? "" } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : {}) }, include: { _count: { select: { roomsDormitories: true } } } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.name, { subtitle: updated.address, active: updated.active, usageCount: updated._count.roomsDormitories, fields: { address: updated.address } }));
+    }
+    if (resource === "rooms") {
+      const data = { ...(typeof (body.room_number ?? body.title ?? body.name) === "string" ? { roomNumber: requiredString(body.room_number ?? body.title ?? body.name, "ROOM_NUMBER_REQUIRED") } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : {}) };
+      const room = await this.prisma.room.update({ where: { id }, data });
+      if ("dormitory_id" in body) {
+        await this.prisma.roomsDormitory.deleteMany({ where: { roomId: id } });
+        const dormitoryId = stringValue(body.dormitory_id);
+        if (dormitoryId) await this.prisma.roomsDormitory.create({ data: { dormitoryId, roomId: id } });
+      }
+      const updated = await this.prisma.room.findUniqueOrThrow({ where: { id: room.id }, include: { roomsDormitories: { include: { dormitory: true } }, _count: { select: { beds: true, roomPrices: true } } } });
+      const dormitory = updated.roomsDormitories[0]?.dormitory;
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.roomNumber, { subtitle: dormitory?.name, active: updated.active, usageCount: updated._count.beds + updated._count.roomPrices, fields: { dormitory_id: dormitory?.id ?? "", room_number: updated.roomNumber } }));
+    }
+    if (resource === "beds") {
+      const updated = await this.prisma.bed.update({ where: { id }, data: { ...("room_id" in body ? { roomId: requiredString(body.room_id, "ROOM_REQUIRED") } : {}), ...("bed_number" in body ? { bedNumber: Math.trunc(numberValue(body.bed_number, 1)) } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : {}) }, include: { room: true, _count: { select: { housingReservations: true, housingFacts: true } } } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.bedNumber ? `${updated.bedNumber}-е койко-место` : "Койко-место", { subtitle: updated.room.roomNumber, active: updated.active, usageCount: updated._count.housingReservations + updated._count.housingFacts, fields: { room_id: updated.roomId, bed_number: updated.bedNumber ?? 1 } }));
+    }
+    if (resource === "priceList") {
+      const updated = await this.prisma.priceList.update({ where: { id }, data: { ...("operation_id" in body ? { operationId: requiredString(body.operation_id, "OPERATION_REQUIRED") } : {}), ...("section_id" in body ? { sectionId: requiredString(body.section_id, "SECTION_REQUIRED") } : {}), ...("cost" in body ? { cost: numberValue(body.cost, 0) } : {}), ...("date_applyed" in body ? { dateApplied: optionalApiDate(body.date_applyed) ?? null } : {}) }, include: { operation: true, section: true } });
+      return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.operation.name, { subtitle: updated.section.name, active: true, fields: { operation_id: updated.operationId, section_id: updated.sectionId, cost: updated.cost, date_applyed: updated.dateApplied ? formatApiDate(updated.dateApplied) : "" } }));
+    }
+    const updated = await this.prisma.roomPriceList.update({ where: { id }, data: { ...("room_id" in body ? { roomId: requiredString(body.room_id, "ROOM_REQUIRED") } : {}), ...("cost" in body ? { cost: numberValue(body.cost, 0) } : {}), ...("date_applyed" in body ? { dateApplied: optionalApiDate(body.date_applyed) ?? null } : {}) }, include: { room: true } });
+    return dictionaryDelta("updated", resource, id, dictionaryItem(updated.id, updated.room.roomNumber, { active: true, fields: { room_id: updated.roomId, cost: updated.cost == null ? "" : Number(updated.cost), date_applyed: updated.dateApplied ? formatApiDate(updated.dateApplied) : "" } }));
+  }
+
+  private async deleteDictionaryItem(factoryId: string, resource: DictionaryResource, id: string): Promise<MutationDelta> {
+    const usageCount = await this.dictionaryUsageCount(factoryId, resource, id);
+    if (usageCount > 0 && supportsDictionaryArchive(resource)) {
+      return this.updateDictionaryItem(factoryId, resource, id, { active: false });
+    }
+    if (usageCount > 0) {
+      throw new BadRequestException({ code: "DICTIONARY_ITEM_USED", message: "Элемент используется и не может быть удален" });
+    }
+    if (resource === "employeeStatuses") await this.prisma.employeeStatus.delete({ where: { id } });
+    else if (resource === "housingReservationStatuses") await this.prisma.housingReservationStatus.delete({ where: { id } });
+    else if (resource === "housingFactStatuses") await this.prisma.housingFactStatus.delete({ where: { id } });
+    else if (resource === "dormitories") { await this.requireFactoryDormitory(factoryId, id); await this.prisma.dormitory.delete({ where: { id } }); }
+    else if (resource === "rooms") await this.prisma.room.delete({ where: { id } });
+    else if (resource === "beds") await this.prisma.bed.delete({ where: { id } });
+    else if (resource === "priceList") await this.prisma.priceList.delete({ where: { id } });
+    else await this.prisma.roomPriceList.delete({ where: { id } });
+    return { ok: true, action: "deleted", resource, id };
+  }
+
+  private async dictionaryUsageCount(factoryId: string, resource: DictionaryResource, id: string): Promise<number> {
+    if (resource === "employeeStatuses") return this.prisma.employee.count({ where: { employeeStatusId: id } });
+    if (resource === "housingReservationStatuses") return this.prisma.housingReservation.count({ where: { statusId: id } });
+    if (resource === "housingFactStatuses") return this.prisma.housingFact.count({ where: { statusId: id } });
+    if (resource === "dormitories") return this.prisma.roomsDormitory.count({ where: { dormitoryId: id, dormitory: { factoryId } } });
+    if (resource === "rooms") return (await this.prisma.bed.count({ where: { roomId: id } })) + (await this.prisma.roomPriceList.count({ where: { roomId: id } }));
+    if (resource === "beds") return (await this.prisma.housingReservation.count({ where: { bedId: id } })) + (await this.prisma.housingFact.count({ where: { bedId: id } }));
+    return 0;
+  }
+
+  private async requireFactoryDormitory(factoryId: string, id: string) {
+    const dormitory = await this.prisma.dormitory.findFirst({ where: { id, factoryId } });
+    if (!dormitory) throwNotFound("dormitories", id);
+    return dormitory;
+  }
+
+  private async importCompatEmployees(factoryId: string): Promise<void> {
+    const records = await this.prisma.compatRecord.findMany({
+      where: { factoryId, resource: "employees" }
+    });
+    if (!records.length) return;
+    for (const record of records) {
+      if (!isCompatData(record.data)) continue;
+      const exists = await this.prisma.employee.findUnique({ where: { id: record.recordId } });
+      if (exists) continue;
+      const statusId = await this.resolveEmployeeStatusId(record.data.status);
+      await this.prisma.employee.create({
+        data: {
+          id: record.recordId,
+          fullName: stringValue(record.data.full_name) ?? "Новый сотрудник",
+          ...employeeWriteInput(record.data, statusId)
+        }
+      });
+    }
   }
 
   private async hydrateStore(factoryId: string, store: CompatStore): Promise<void> {
@@ -481,6 +729,82 @@ export class CompatController {
       resource: "operations",
       id
     };
+  }
+
+  private async createEmployee(body: Record<string, unknown>): Promise<MutationDelta> {
+    const statusId = await this.resolveEmployeeStatusId(body.status);
+    const created = await this.prisma.employee.create({
+      data: {
+        id: stringValue(body.id) ?? randomUUID(),
+        fullName: stringValue(body.full_name) ?? "Новый сотрудник",
+        ...employeeWriteInput(body, statusId)
+      },
+      include: { status: true }
+    });
+    return {
+      ok: true,
+      action: "created",
+      resource: "employees",
+      id: created.id,
+      data: mapEmployee(created),
+      createdEmployeeId: created.id
+    };
+  }
+
+  private async updateEmployee(id: string, body: Record<string, unknown>): Promise<MutationDelta> {
+    await this.requireEmployee(id);
+    const statusId = "status" in body ? await this.resolveEmployeeStatusId(body.status) : undefined;
+    const updated = await this.prisma.employee.update({
+      where: { id },
+      data: employeeWriteInput(body, statusId),
+      include: { status: true }
+    });
+    return {
+      ok: true,
+      action: "updated",
+      resource: "employees",
+      id,
+      data: mapEmployee(updated)
+    };
+  }
+
+  private async deleteEmployee(id: string): Promise<MutationDelta> {
+    await this.requireEmployee(id);
+    await this.prisma.employee.delete({ where: { id } });
+    return {
+      ok: true,
+      action: "deleted",
+      resource: "employees",
+      id
+    };
+  }
+
+  private async requireEmployee(id: string) {
+    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    if (!employee) {
+      throw new NotFoundException({
+        code: "EMPLOYEE_NOT_FOUND",
+        message: "Сотрудник не найден"
+      });
+    }
+    return employee;
+  }
+
+  private async resolveEmployeeStatusId(value: unknown): Promise<string | null> {
+    const title = stringValue(value)?.trim();
+    if (!title) return null;
+    const existing = await this.prisma.employeeStatus.findFirst({
+      where: { title }
+    });
+    if (existing) return existing.id;
+    const created = await this.prisma.employeeStatus.create({
+      data: {
+        id: randomUUID(),
+        title,
+        active: true
+      }
+    });
+    return created.id;
   }
 
   private async createSection(factoryId: string, body: Record<string, unknown>): Promise<MutationDelta> {
@@ -949,6 +1273,23 @@ function accessForRoles(roles: UserRole[]): RoleAccess {
   };
 }
 
+function isFactoryPlannerOnly(roles: UserRole[]): boolean {
+  return roles.length === 1 && roles[0] === "factoryPlanner";
+}
+
+function emptyDictionaries(): NonNullable<BootstrapData["dictionaries"]> {
+  return {
+    employeeStatuses: [],
+    housingReservationStatuses: [],
+    housingFactStatuses: [],
+    dormitories: [],
+    rooms: [],
+    beds: [],
+    priceList: [],
+    roomPriceList: []
+  };
+}
+
 type BootstrapPlanData = Pick<BootstrapData, "plans" | "sections" | "operationCatalog" | "operations">;
 
 function filterPlanDataForAccess(planData: BootstrapPlanData, permissions: RoleAccess): BootstrapPlanData {
@@ -1004,6 +1345,19 @@ function normalizeResource(resource: string): MutationResource {
     assignments: "assignments",
     "housing-dorms": "housingDorms",
     housingDorms: "housingDorms",
+    "employee-statuses": "employeeStatuses",
+    employeeStatuses: "employeeStatuses",
+    "housing-reservation-statuses": "housingReservationStatuses",
+    housingReservationStatuses: "housingReservationStatuses",
+    "housing-fact-statuses": "housingFactStatuses",
+    housingFactStatuses: "housingFactStatuses",
+    dormitories: "dormitories",
+    rooms: "rooms",
+    beds: "beds",
+    "price-list": "priceList",
+    priceList: "priceList",
+    "room-price-list": "roomPriceList",
+    roomPriceList: "roomPriceList",
     reservations: "reservations",
     facts: "facts",
     explanations: "explanations",
@@ -1064,7 +1418,17 @@ function collectionFor(store: CompatStore, resource: MutationResource): Map<stri
       message: "Справочник операций хранится в базе"
     });
   }
+  if (isDictionaryResource(resource)) {
+    throw new BadRequestException({
+      code: "INVALID_MUTATION_RESOURCE",
+      message: "Справочник хранится в базе"
+    });
+  }
   return store[resource];
+}
+
+function isDictionaryResource(resource: MutationResource): resource is DictionaryResource {
+  return dictionaryResources.has(resource as DictionaryResource);
 }
 
 function requireExisting(collection: Map<string, CompatRecord>, id: string, resource: MutationResource): CompatRecord {
@@ -1124,6 +1488,11 @@ function requiredActionsForMutation(resource: MutationResource, method: "POST" |
   if (resource === "sections" || resource === "operationCatalog") return ["admin.users.manage"];
   if (resource === "assignments") return ["plans.out.edit"];
   if (resource === "employees") return ["personnel.edit"];
+  if (isDictionaryResource(resource)) {
+    if (resource === "employeeStatuses") return ["personnel.edit"];
+    if (resource === "housingReservationStatuses" || resource === "housingFactStatuses" || resource === "dormitories" || resource === "rooms" || resource === "beds" || resource === "roomPriceList") return ["housing.edit"];
+    return ["admin.users.manage"];
+  }
   if (resource === "reservations" || resource === "housingDorms" || resource === "settings") return ["housing.edit"];
   if (resource === "facts") return [actionForFactSide(resolveFactSide(body))];
   if (resource === "explanations") return [actionForFactSide(resolveExplanationSide(store, body))];
@@ -1300,6 +1669,39 @@ function numberValue(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function dictionaryItem(id: string, title: string, options: { subtitle?: string | null; active?: boolean; usageCount?: number; fields?: Record<string, unknown> } = {}) {
+  return {
+    id,
+    title,
+    subtitle: options.subtitle ?? undefined,
+    active: options.active ?? true,
+    usageCount: options.usageCount ?? 0,
+    fields: options.fields
+  };
+}
+
+function dictionaryDelta(action: "created" | "updated", resource: DictionaryResource, id: string, data: unknown): MutationDelta {
+  return { ok: true, action, resource, id, data };
+}
+
+function statusDictionaryWrite(body: Record<string, unknown>) {
+  return {
+    ...(typeof (body.title ?? body.name) === "string" ? { title: requiredString(body.title ?? body.name, "TITLE_REQUIRED") } : {}),
+    ...(typeof body.active === "boolean" ? { active: body.active } : {})
+  };
+}
+
+function finalStatusDictionaryWrite(body: Record<string, unknown>) {
+  return {
+    ...statusDictionaryWrite(body),
+    ...("is_final" in body ? { isFinal: Boolean(body.is_final) } : {})
+  };
+}
+
+function supportsDictionaryArchive(resource: DictionaryResource) {
+  return resource !== "priceList" && resource !== "roomPriceList";
+}
+
 function parseApiDate(value: string): Date {
   const ruMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
   if (ruMatch) {
@@ -1322,6 +1724,64 @@ function formatApiDate(value: Date): string {
     year: "numeric",
     timeZone: "UTC"
   }).format(value);
+}
+
+function optionalApiDate(value: unknown): Date | null | undefined {
+  if (value === null || value === "") return null;
+  const normalized = stringValue(value);
+  return normalized ? parseApiDate(normalized) : undefined;
+}
+
+function employeeWriteInput(body: Record<string, unknown>, statusId?: string | null): EmployeeWriteData {
+  const data: EmployeeWriteData = {};
+  if ("full_name" in body) data.fullName = stringValue(body.full_name) ?? "Новый сотрудник";
+  if ("country" in body) data.country = stringValue(body.country) ?? null;
+  if ("age" in body) data.age = Math.trunc(numberValue(body.age, 0)) || null;
+  if (statusId !== undefined) data.employeeStatusId = statusId;
+  if ("phone" in body) data.phone = stringValue(body.phone) ?? null;
+  if ("email" in body) data.email = stringValue(body.email) ?? null;
+  if ("birth_date" in body) data.birthDate = optionalApiDate(body.birth_date);
+  if ("passport_no" in body) data.passportNo = stringValue(body.passport_no) ?? null;
+  if ("passport_issued" in body) data.passportIssued = stringValue(body.passport_issued) ?? null;
+  if ("registration" in body) data.registration = stringValue(body.registration) ?? null;
+  if ("needs_housing" in body) data.needsHousing = Boolean(numberValue(body.needs_housing, body.needs_housing ? 1 : 0));
+  if ("needs_registration" in body) data.needsRegistration = Boolean(numberValue(body.needs_registration, body.needs_registration ? 1 : 0));
+  if ("driver_categories" in body) data.driverCategories = stringValue(body.driver_categories) ?? null;
+  return data;
+}
+
+function mapEmployee(employee: {
+  id: string;
+  fullName: string;
+  country: string | null;
+  age: number | null;
+  status: { title: string } | null;
+  phone: string | null;
+  email: string | null;
+  birthDate: Date | null;
+  passportNo: string | null;
+  passportIssued: string | null;
+  registration: string | null;
+  needsHousing: boolean;
+  needsRegistration: boolean;
+  driverCategories: string | null;
+}): BootstrapData["employees"][number] {
+  return {
+    id: employee.id,
+    full_name: employee.fullName,
+    country: employee.country ?? undefined,
+    age: employee.age ?? undefined,
+    status: employee.status?.title ?? "В резерве",
+    phone: employee.phone ?? undefined,
+    email: employee.email ?? undefined,
+    birth_date: employee.birthDate ? formatApiDate(employee.birthDate) : undefined,
+    passport_no: employee.passportNo ?? undefined,
+    passport_issued: employee.passportIssued ?? undefined,
+    registration: employee.registration ?? undefined,
+    needs_housing: employee.needsHousing ? 1 : 0,
+    needs_registration: employee.needsRegistration ? 1 : 0,
+    driver_categories: employee.driverCategories ?? undefined
+  };
 }
 
 function mapPlan(plan: {
