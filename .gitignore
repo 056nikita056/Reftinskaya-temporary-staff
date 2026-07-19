@@ -3,6 +3,7 @@ node_modules/
 .expo/
 .codex-logs/
 .local/
+.tmp/
 .env
 .env.local
 apps/*/.env

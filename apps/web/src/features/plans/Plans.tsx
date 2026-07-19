@@ -36,6 +36,24 @@ type PlanContextMenu = {
   planId: string;
   operationId?: string;
 };
+type FieldHistoryEntry = {
+  at: string;
+  from: string;
+  to: string;
+};
+
+function fieldHistoryKey(entity: "plans" | "operations", id: string, field: string) {
+  return `${entity}:${id}:${field}`;
+}
+
+function fieldHistoryValue(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || "пусто";
+}
+
+function fieldHistoryTime() {
+  return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
 
 function createDraftOperation(sectionOrder: number, planId = NEW_PLAN_ID): Operation {
   return {
@@ -122,6 +140,10 @@ function sendKindForPlan(access: PlanEditAccess, plan: Plan): PlanKind | null {
   if (code === "submitted_to_hr" && access.hr) return "hr";
   if (["received_by_outsourcer", "rejected"].includes(code) && access.out) return "out";
   return null;
+}
+
+function canReturnFactoryPlanToEdit(access: PlanAccess, plan?: Plan) {
+  return Boolean(plan && access.factory && plan.owner_role === "factory" && planStatusCode(plan) === "submitted_to_hr");
 }
 
 function canReadPlan(plan: Plan, access: PlanAccess) {
@@ -367,6 +389,8 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   const [contextMenu, setContextMenu] = useState<PlanContextMenu | null>(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [actionHistory, setActionHistory] = useState<string[]>([]);
+  const [returnedToEditPlanIds, setReturnedToEditPlanIds] = useState<Set<string>>(() => new Set());
+  const [fieldHistoryByKey, setFieldHistoryByKey] = useState<Record<string, FieldHistoryEntry[]>>({});
   const seenPlanIdsRef = useRef<Set<string>>(new Set(plans.map((plan) => plan.id)));
   const [collapsedPlanIds, setCollapsedPlanIds] = useState<Set<string>>(() => new Set(plans.map((plan) => plan.id).filter((id) => id !== createdPlanId)));
   const visiblePlanIds = new Set(plans.map((plan) => plan.id));
@@ -377,6 +401,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   const selectedOperations = operations.filter((operation) => selectedOperationIds.has(operation.id));
   const selectedEditAccess = selectedPlan ? editAccessForPlan(access, selectedPlan, kind) : undefined;
   const selectedSendKind = selectedPlan && selectedEditAccess ? sendKindForPlan(selectedEditAccess, selectedPlan) : null;
+  const selectedCanReturnToEdit = canReturnFactoryPlanToEdit(access, selectedPlan);
   const totalRequired = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
   const totalStaff = visibleOperations.reduce((sum, operation) => sum + numberValue(operation.staff_count), 0);
   const totalOutsource = visibleOperations.reduce((sum, operation) => sum + calculateOutsource(operation.required_staff, operation.staff_count), 0);
@@ -446,6 +471,16 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     if (result && message) setActionHistory((current) => [message, ...current].slice(0, 3));
     window.setTimeout(() => setSaveStatus(""), result ? 1200 : 2200);
     return result;
+  };
+  const recordFieldChange = (entity: "plans" | "operations", id: string, field: string, from: unknown, to: unknown) => {
+    const previous = fieldHistoryValue(from);
+    const next = fieldHistoryValue(to);
+    if (previous === next) return;
+    const key = fieldHistoryKey(entity, id, field);
+    setFieldHistoryByKey((current) => ({
+      ...current,
+      [key]: [{ at: fieldHistoryTime(), from: previous, to: next }, ...(current[key] || [])].slice(0, 5)
+    }));
   };
   const selectPlan = (planId: string, event: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {}) => {
     setSelectedPlanId(planId);
@@ -526,10 +561,6 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     }, source ? "Строка продублирована" : "Строка добавлена");
     const created = operationFromMutationResult(result);
     if (created) {
-      setTopOperationIdsByPlan((current) => ({
-        ...current,
-        [created.plan_id]: [created.id, ...(current[created.plan_id] || []).filter((id) => id !== created.id)]
-      }));
       setSelectedPlanId(created.plan_id);
       setSelectedOperationId(created.id);
       setSelectedOperationIds(new Set([created.id]));
@@ -725,7 +756,28 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
     const question = sendKind === "factory" ? "Отправить план HR?" : sendKind === "hr" ? "Отправить план аутсорсеру?" : "Отправить план на согласование?";
     if (!await confirm({ title: "Отправка плана", message: question, confirmLabel: "Отправить" })) return;
     const status_code = sendKind === "factory" ? "submitted_to_hr" : sendKind === "hr" ? "received_by_outsourcer" : "on_approval";
-    await save(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    const result = await save(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    if (result) {
+      setReturnedToEditPlanIds((current) => {
+        const next = new Set(current);
+        next.delete(plan.id);
+        return next;
+      });
+    }
+  };
+  const returnPlanToEdit = async (plan: Plan) => {
+    if (!canReturnFactoryPlanToEdit(access, plan)) return;
+    if (!await confirm({
+      title: "Изменить отправленный план?",
+      message: "План вернется в редактирование. После внесения изменений отправьте его снова.",
+      confirmLabel: "Изменить",
+      cancelLabel: "Отменить",
+      tone: "warning"
+    })) return;
+    const result = await save(`/plans/${plan.id}`, "PUT", { status_code: "draft" }, "План открыт для изменений");
+    if (result) {
+      setReturnedToEditPlanIds((current) => new Set(current).add(plan.id));
+    }
   };
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -815,9 +867,15 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
           <ToolbarAction title="Отменить последнее действие" disabled={!undoAction} onClick={() => undoAction && void undoAction.run().then(() => setUndoAction(null))}>
             Отменить
           </ToolbarAction>
-          <ToolbarAction title="Отправить план" primary disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
-            <Send size={16} /> Отправить
-          </ToolbarAction>
+          {selectedCanReturnToEdit ? (
+            <ToolbarAction title="Изменить отправленный план" primary disabled={!selectedPlan} onClick={() => selectedPlan && returnPlanToEdit(selectedPlan)}>
+              <Pencil size={16} /> Изменить
+            </ToolbarAction>
+          ) : (
+            <ToolbarAction title="Отправить план" primary disabled={!selectedPlan || !selectedSendKind} onClick={() => selectedPlan && sendPlan(selectedPlan)}>
+              <Send size={16} /> Отправить
+            </ToolbarAction>
+          )}
           <ToolbarAction title="Добавить строку" disabled={!selectedPlan || !selectedEditAccess?.factory} onClick={() => selectedPlan && createOperation(selectedPlan)}>
             <Plus size={16} /> Добавить
           </ToolbarAction>
@@ -861,8 +919,10 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
               ? planRows.filter((operation) => `${displaySectionName(operation.section_name)} ${displayOperationName(operation.name)}`.toLowerCase().includes(normalizedOperationSearch))
               : planRows;
             const editAccess = editAccessForPlan(access, plan, kind);
-            const displayStatus = displayPlanStatus(plan, kind, access);
+            const returnedToEdit = returnedToEditPlanIds.has(plan.id) && planStatusCode(plan) === "draft";
+            const displayStatus = returnedToEdit ? "Изменяется" : displayPlanStatus(plan, kind, access);
             const rowSendKind = sendKindForPlan(editAccess, plan);
+            const rowCanReturnToEdit = canReturnFactoryPlanToEdit(access, plan);
             const collapsed = collapsedPlanIds.has(plan.id);
             const canCollapse = planRows.length > 0;
             const planRequired = planRows.reduce((sum, operation) => sum + numberValue(operation.required_staff), 0);
@@ -874,7 +934,7 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
             const planRow = (
               <tr
                 key={`${plan.id}-plan`}
-                className={`border-t-2 border-slate-300 bg-emerald-50/40 hover:bg-emerald-50 ${dropPlanId === plan.id ? "ring-2 ring-inset ring-refGreen" : ""} ${planSelected ? "border-l-4 border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]" : "border-l-4 border-l-transparent"}`}
+                className={`border-t-2 border-slate-300 ${returnedToEdit ? "bg-orange-50 hover:bg-orange-100" : "bg-emerald-50/40 hover:bg-emerald-50"} ${dropPlanId === plan.id ? "ring-2 ring-inset ring-refGreen" : ""} ${planSelected ? `border-l-4 ${returnedToEdit ? "border-l-orange-500 bg-orange-100 shadow-[inset_0_0_0_2px_rgba(249,115,22,0.24)]" : "border-l-refGreen bg-emerald-100 shadow-[inset_0_0_0_2px_rgba(0,122,83,0.28)]"}` : returnedToEdit ? "border-l-4 border-l-orange-400" : "border-l-4 border-l-transparent"}`}
                 onDragOver={(event) => {
                   if (!canDropHere) return;
                   event.preventDefault();
@@ -905,26 +965,27 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                 }}
                 onDoubleClick={() => togglePlanCollapsed(plan.id)}
               >
-                <Td>
+                <Td className="overflow-visible">
                   <button
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-refGreen text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     type="button"
-                    disabled={!rowSendKind}
-                    title="Отправить план"
+                    disabled={!rowSendKind && !rowCanReturnToEdit}
+                    title={rowCanReturnToEdit ? "Изменить план" : "Отправить план"}
                     onClick={(event) => {
                       event.stopPropagation();
-                      void sendPlan(plan);
+                      if (rowCanReturnToEdit) void returnPlanToEdit(plan);
+                      else void sendPlan(plan);
                     }}
                   >
-                    <Send size={16} />
+                    {rowCanReturnToEdit ? <Pencil size={16} /> : <Send size={16} />}
                   </button>
                 </Td>
                 <Td className="text-left">
-                  <span className={`inline-flex max-w-full items-center rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 ring-slate-200 xl:px-2.5 xl:text-xs ${statusTone(displayStatus)}`}>
+                  <span className={`inline-flex max-w-full items-center rounded-full bg-white px-1.5 py-1 text-[10px] font-normal leading-none ring-1 xl:px-2.5 xl:text-xs ${returnedToEdit ? "text-orange-700 ring-orange-300" : `ring-slate-200 ${statusTone(displayStatus)}`}`}>
                     <span className="truncate">{displayStatus}</span>
                   </span>
                 </Td>
-                <Td>
+                <Td className="overflow-visible">
                   <div className="flex min-w-0 items-center justify-center gap-1">
                     {canCollapse ? (
                       <button
@@ -941,10 +1002,24 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                     ) : (
                       <span className="h-6 w-6 shrink-0" />
                     )}
-                    <PlanDateInput value={plan.start_date} editable={editAccess.factory} onSave={(value) => save(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")} />
+                    <PlanDateInput
+                      value={plan.start_date}
+                      editable={editAccess.factory}
+                      history={fieldHistoryByKey[fieldHistoryKey("plans", plan.id, "start_date")]}
+                      onChanged={(from, to) => recordFieldChange("plans", plan.id, "start_date", from, to)}
+                      onSave={(value) => save(`/plans/${plan.id}`, "PUT", { start_date: value }, "Дата сохранена")}
+                    />
                   </div>
                 </Td>
-                <Td><PlanDateInput value={plan.end_date} editable={editAccess.factory} onSave={(value) => save(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")} /></Td>
+                <Td>
+                  <PlanDateInput
+                    value={plan.end_date}
+                    editable={editAccess.factory}
+                    history={fieldHistoryByKey[fieldHistoryKey("plans", plan.id, "end_date")]}
+                    onChanged={(from, to) => recordFieldChange("plans", plan.id, "end_date", from, to)}
+                    onSave={(value) => save(`/plans/${plan.id}`, "PUT", { end_date: value }, "Дата сохранена")}
+                  />
+                </Td>
                 <Td className="text-left">
                   <input
                     className="h-8 w-full min-w-0 rounded border border-slate-300 bg-white px-2 text-xs font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20"
@@ -1001,10 +1076,48 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
                   setContextMenu({ x: event.clientX, y: event.clientY, planId: plan.id, operationId: operation.id });
                 }}
               >
-                <Td colSpan={3} className="text-left"><CatalogCell mode="section" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={save} /></Td>
-                <Td colSpan={3} className="text-left"><CatalogCell mode="operation" operation={operation} editable={editAccess.factory} sections={sections} operationCatalog={operationCatalog} mutate={save} /></Td>
-                <Td numeric><NumberCell value={operation.required_staff} editable={editAccess.factory} onSave={(value) => save(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")} /></Td>
-                <Td numeric><NumberCell value={operation.staff_count} editable={editAccess.hr} onSave={(value) => save(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")} /></Td>
+                <Td colSpan={3} className="overflow-visible text-left">
+                  <CatalogCell
+                    mode="section"
+                    operation={operation}
+                    editable={editAccess.factory}
+                    sections={sections}
+                    operationCatalog={operationCatalog}
+                    mutate={save}
+                    history={fieldHistoryByKey[fieldHistoryKey("operations", operation.id, "section_id")]}
+                    onChanged={(from, to) => recordFieldChange("operations", operation.id, "section_id", from, to)}
+                  />
+                </Td>
+                <Td colSpan={3} className="overflow-visible text-left">
+                  <CatalogCell
+                    mode="operation"
+                    operation={operation}
+                    editable={editAccess.factory}
+                    sections={sections}
+                    operationCatalog={operationCatalog}
+                    mutate={save}
+                    history={fieldHistoryByKey[fieldHistoryKey("operations", operation.id, "operation_id")]}
+                    onChanged={(from, to) => recordFieldChange("operations", operation.id, "operation_id", from, to)}
+                  />
+                </Td>
+                <Td numeric className="overflow-visible">
+                  <NumberCell
+                    value={operation.required_staff}
+                    editable={editAccess.factory}
+                    history={fieldHistoryByKey[fieldHistoryKey("operations", operation.id, "required_staff")]}
+                    onChanged={(from, to) => recordFieldChange("operations", operation.id, "required_staff", from, to)}
+                    onSave={(value) => save(`/operations/${operation.id}`, "PUT", { required_staff: value }, "Персонал сохранен")}
+                  />
+                </Td>
+                <Td numeric className="overflow-visible">
+                  <NumberCell
+                    value={operation.staff_count}
+                    editable={editAccess.hr}
+                    history={fieldHistoryByKey[fieldHistoryKey("operations", operation.id, "staff_count")]}
+                    onChanged={(from, to) => recordFieldChange("operations", operation.id, "staff_count", from, to)}
+                    onSave={(value) => save(`/operations/${operation.id}`, "PUT", { staff_count: value, outsource_count: calculateOutsource(operation.required_staff, value) }, "Штат сохранен")}
+                  />
+                </Td>
                 <Td numeric>{calculateOutsource(operation.required_staff, operation.staff_count)}</Td>
               </tr>
                 );
@@ -1110,34 +1223,58 @@ function PlanExcelList({ access, kind, plans, operations, assignments, sections,
   );
 }
 
-function CatalogCell({ mode, operation, editable, sections, operationCatalog, mutate }: { mode: "section" | "operation"; operation: Operation; editable: boolean; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate }) {
+function ChangeHistoryMarker({ entries }: { entries?: FieldHistoryEntry[] }) {
+  if (!entries?.length) return null;
+  return (
+    <span className="group absolute -top-2 right-1 z-20 flex h-5 w-5 items-center justify-center rounded-full border border-orange-300 bg-orange-500 text-[11px] font-semibold leading-none text-white shadow-sm">
+      !
+      <span className="pointer-events-none absolute right-0 top-6 hidden min-w-56 max-w-72 rounded-md border border-slate-200 bg-white p-2 text-left text-xs font-normal leading-snug text-slate-700 shadow-panel group-hover:block">
+        <span className="mb-1 block text-[11px] font-normal uppercase text-slate-500">История изменений</span>
+        {entries.map((entry, index) => (
+          <span key={`${entry.at}-${index}`} className="block border-t border-slate-100 py-1 first:border-t-0">
+            <span className="text-slate-400">{entry.at}</span>
+            <span className="block">{entry.from} &rarr; {entry.to}</span>
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function CatalogCell({ mode, operation, editable, sections, operationCatalog, mutate, history, onChanged }: { mode: "section" | "operation"; operation: Operation; editable: boolean; sections: Section[]; operationCatalog: OperationCatalogItem[]; mutate: BootstrapMutate; history?: FieldHistoryEntry[]; onChanged?: (from: string, to: string) => void }) {
   const [open, setOpen] = useState(false);
   const entries = mode === "section" ? buildSectionTree(sections) : buildOperationTree(operationCatalog);
   const selectedId = mode === "section" ? operation.section_id ? `section:${operation.section_id}` : "" : operation.operation_id ? `operation:${operation.operation_id}` : "";
   const label = mode === "section" ? displaySectionName(operation.section_name) : displayOperationName(operation.name);
   const select = async (entry: PickerEntry) => {
     if (!editable) return;
+    const previousLabel = label;
     if (mode === "section") {
       const section = sections.find((item) => item.id === entry.id);
-      await mutate(`/operations/${operation.id}`, "PUT", {
+      const nextLabel = section?.name || "";
+      const result = await mutate(`/operations/${operation.id}`, "PUT", {
         section_id: section?.id,
-        section_name: section?.name || "",
+        section_name: nextLabel,
         section_order: section?.order ?? operation.section_order
       }, "Территория сохранена");
+      if (result) onChanged?.(previousLabel, displaySectionName(nextLabel));
     } else {
       const catalogOperation = operationCatalog.find((item) => item.id === entry.id);
-      await mutate(`/operations/${operation.id}`, "PUT", {
+      const nextLabel = catalogOperation?.name || entry.name;
+      const result = await mutate(`/operations/${operation.id}`, "PUT", {
         operation_id: catalogOperation?.id,
-        name: catalogOperation?.name || entry.name
+        name: nextLabel
       }, "Операция сохранена");
+      if (result) onChanged?.(previousLabel, displayOperationName(nextLabel));
     }
     setOpen(false);
   };
 
-  if (!editable) return <span className="block truncate">{label}</span>;
+  if (!editable) return <span className="relative block truncate pt-1"><ChangeHistoryMarker entries={history} />{label}</span>;
 
   return (
-    <>
+    <span className="relative block pt-1">
+      <ChangeHistoryMarker entries={history} />
       <button className="h-8 w-full truncate rounded bg-slate-100 px-2 text-left text-sm font-normal text-refDark outline-none ring-1 ring-slate-200 transition hover:bg-emerald-50 focus:bg-white focus:ring-2 focus:ring-refGreen/30" type="button" onClick={() => setOpen(true)}>
         {label}
       </button>
@@ -1152,7 +1289,7 @@ function CatalogCell({ mode, operation, editable, sections, operationCatalog, mu
           close={() => setOpen(false)}
         />
       )}
-    </>
+    </span>
   );
 }
 
@@ -1169,21 +1306,29 @@ function ToolbarAction({ children, title, primary, danger, disabled, onClick }: 
   );
 }
 
-function PlanDateInput({ value, editable, onSave }: { value: string; editable: boolean; onSave: (value: string) => Promise<unknown> }) {
+function PlanDateInput({ value, editable, history, onChanged, onSave }: { value: string; editable: boolean; history?: FieldHistoryEntry[]; onChanged?: (from: string, to: string) => void; onSave: (value: string) => Promise<unknown> }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
-  if (!editable) return <span className="font-normal">{value}</span>;
+  const save = async () => {
+    if (draft === value) return;
+    const result = await onSave(draft);
+    if (result) onChanged?.(value, draft);
+  };
+  if (!editable) return <span className="relative inline-block pt-1 font-normal"><ChangeHistoryMarker entries={history} />{value}</span>;
   return (
-    <input
-      className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => draft !== value && onSave(draft)}
-    />
+    <span className="relative block pt-1">
+      <ChangeHistoryMarker entries={history} />
+      <input
+        className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => void save()}
+      />
+    </span>
   );
 }
 
-function NumberCell({ value, editable, onSave }: { value: number; editable: boolean; onSave: (value: number) => Promise<unknown> }) {
+function NumberCell({ value, editable, history, onChanged, onSave }: { value: number; editable: boolean; history?: FieldHistoryEntry[]; onChanged?: (from: number, to: number) => void; onSave: (value: number) => Promise<unknown> }) {
   const displayValue = (nextValue: unknown) => numberValue(nextValue) === 0 ? "" : String(nextValue ?? 0);
   const [draft, setDraft] = useState(displayValue(value));
   const lastSavedRef = useRef(numberValue(value));
@@ -1192,30 +1337,35 @@ function NumberCell({ value, editable, onSave }: { value: number; editable: bool
     setDraft(displayValue(value));
     lastSavedRef.current = nextValue;
   }, [value]);
-  const save = () => {
+  const save = async () => {
     const next = numberValue(draft);
     if (next !== lastSavedRef.current) {
+      const previous = lastSavedRef.current;
       lastSavedRef.current = next;
-      void onSave(next);
+      const result = await onSave(next);
+      if (result) onChanged?.(previous, next);
     }
   };
-  if (!editable) return <span className="font-normal">{value ?? 0}</span>;
+  if (!editable) return <span className="relative inline-block pt-1 font-normal"><ChangeHistoryMarker entries={history} />{value ?? 0}</span>;
   return (
-    <input
-      className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
-      inputMode="numeric"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={(event) => event.currentTarget.select()}
-      onBlur={save}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          save();
-          event.currentTarget.blur();
-        }
-      }}
-    />
+    <span className="relative block pt-1">
+      <ChangeHistoryMarker entries={history} />
+      <input
+        className="h-8 w-full min-w-0 rounded border border-slate-300 px-1 text-center font-normal outline-none focus:border-refGreen focus:ring-2 focus:ring-refGreen/20 xl:px-2"
+        inputMode="numeric"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        onBlur={() => void save()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void save();
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </span>
   );
 }
 
@@ -1387,6 +1537,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const operations = data.operations.filter((operation) => operation.plan_id === planId);
   const [drafts, setDrafts] = useState(() => operations.map((operation) => ({ ...operation })));
   const [dates, setDates] = useState({ start_date: plan?.start_date || todayRu(), end_date: plan?.end_date || defaultEndRu() });
+  const [returnedToEdit, setReturnedToEdit] = useState(false);
   const { confirm, notify } = useUiFeedback();
 
   useEffect(() => {
@@ -1399,6 +1550,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
   const editable = hasEditAccess(editAccess);
   const isEdit = Boolean(edit && editable);
   const sendKind = sendKindForPlan(editAccess, plan);
+  const canReturnToEdit = canReturnFactoryPlanToEdit(access, plan);
   const canDeletePlan = access.admin || editAccess.factory;
 
   const save = async () => {
@@ -1475,6 +1627,7 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
     await save();
     const status_code = sendKind === "factory" ? "submitted_to_hr" : sendKind === "hr" ? "received_by_outsourcer" : "on_approval";
     await mutate(`/plans/${plan.id}`, "PUT", { status_code }, sendKind === "factory" ? "План отправлен в HR" : sendKind === "hr" ? "План отправлен аутсорсеру" : "План отправлен на согласование");
+    setReturnedToEdit(false);
     back();
   };
 
@@ -1510,6 +1663,21 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
     await mutate(`/plans/${plan.id}`, "DELETE", undefined, "План удален");
     back();
   };
+  const returnToEdit = async () => {
+    if (!canReturnToEdit) return;
+    if (!await confirm({
+      title: "Изменить отправленный план?",
+      message: "План вернется в редактирование. После внесения изменений отправьте его снова.",
+      confirmLabel: "Изменить",
+      cancelLabel: "Отменить",
+      tone: "warning"
+    })) return;
+    const next = await mutate(`/plans/${plan.id}`, "PUT", { status_code: "draft" }, "План открыт для изменений");
+    if (next) {
+      setReturnedToEdit(true);
+      openEdit();
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -1517,11 +1685,17 @@ function PlanDetail({ kind, access, planId, edit, data, mutate, back, openEdit, 
         <button className="rounded-md bg-slate-100 px-3 py-2 text-sm font-normal" onClick={back}>Назад</button>
         <div className="flex gap-2">
           {access.admin && <button className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-normal text-red-600 hover:bg-red-100" onClick={deletePlan}><Trash2 size={16} /> Удалить</button>}
+          {!edit && canReturnToEdit && <button className="btn-primary gap-2" onClick={returnToEdit}><Pencil size={16} /> Изменить</button>}
           {!edit && editable && <button className="btn-primary gap-2" onClick={openEdit}><Pencil size={16} /> Редактировать</button>}
         </div>
       </div>
       <PlanHeader plan={plan} displayStatus={displayPlanStatus(plan, kind, access)} dates={dates} setDates={setDates} edit={isEdit && editAccess.factory} />
       <PlanFlowNotice kind={kind} plan={plan} />
+      {returnedToEdit && planStatusCode(plan) === "draft" && (
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-sm font-normal text-orange-700">
+          План открыт на изменение. После правок отправьте его снова.
+        </div>
+      )}
       {edit && !editable && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-normal text-red-700">План уже отправлен. Редактирование закрыто.</div>}
       {isEdit ? (
         <PlanEditor kind={kind} editAccess={editAccess} sections={data.sections || []} operationCatalog={data.operationCatalog || []} drafts={drafts} setDrafts={setDrafts} planId={plan.id} onRemoveOperation={removeOperation} />
@@ -1750,18 +1924,18 @@ function PlanEditor({ kind, editAccess, sections = [], operationCatalog = [], dr
     setDrafts([...drafts, createDraftOperation(drafts.length + 1, planId || NEW_PLAN_ID)]);
   };
   return (
-    <div className="space-y-3">
+    <div>
       <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 shadow-sm">
         <div className="space-y-2">
           {drafts.map((row) => <PlanOperationCard key={row.id} kind={kind} editAccess={editAccess} row={row} sections={sections} operationCatalog={operationCatalog} edit onChange={(patch) => update(row.id, patch)} onRemove={(editAccess?.factory ?? kind === "factory") ? () => onRemoveOperation?.(row) : undefined} />)}
           {!drafts.length && <Empty text="Добавьте первую строку плана." />}
+          {(editAccess?.factory ?? kind === "factory") && (
+            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-dashed border-orange-300 bg-orange-50 text-sm font-normal text-orange-700 transition hover:border-orange-400 hover:bg-orange-100" type="button" onClick={addOperation}>
+              <Plus size={16} /> Операция
+            </button>
+          )}
         </div>
       </div>
-      {(editAccess?.factory ?? kind === "factory") && (
-        <button className="rounded-full bg-orange-500 px-4 py-2 text-sm font-normal text-white" onClick={addOperation}>
-          <Plus size={16} className="inline" /> Операция
-        </button>
-      )}
     </div>
   );
 }

@@ -54,6 +54,12 @@ function upsertById<T extends { id: string }>(items: T[], item: T) {
     : [item, ...items];
 }
 
+function appendOrUpdateById<T extends { id: string }>(items: T[], item: T) {
+  return items.some((current) => current.id === item.id)
+    ? items.map((current) => current.id === item.id ? item : current)
+    : [...items, item];
+}
+
 function applyRelatedEmployee(data: BootstrapData, related?: Record<string, unknown>) {
   const employee = related?.employee as Employee | undefined;
   if (!employee?.id) return data;
@@ -222,7 +228,7 @@ export function applyMutationDelta(current: BootstrapData, delta: MutationDelta,
         explanations: next.explanations.filter((explanation) => !factIds.has(explanation.fact_entry_id))
       };
     } else if (delta.data) {
-      next = { ...next, operations: upsertById(next.operations, delta.data as Operation) };
+      next = { ...next, operations: appendOrUpdateById(next.operations, delta.data as Operation) };
     }
   }
 

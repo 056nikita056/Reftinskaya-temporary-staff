@@ -31,11 +31,10 @@ function auditDetails(log: AuditLogRow) {
 
 function auditObject(log: AuditLogRow) {
   const objectLabel = typeof log.details?.objectLabel === "string" ? log.details.objectLabel : "";
-  if (objectLabel) return log.entityId ? `${objectLabel} / ${log.entityId.slice(0, 8)}` : objectLabel;
+  if (objectLabel) return objectLabel;
   const resourceTitle = typeof log.details?.resourceTitle === "string" ? log.details.resourceTitle : "";
   const entity = resourceTitle || log.entity || "";
-  if (!entity) return "—";
-  return log.entityId ? `${entity} / ${log.entityId.slice(0, 8)}` : entity;
+  return entity || "—";
 }
 
 function csvValue(value: unknown) {

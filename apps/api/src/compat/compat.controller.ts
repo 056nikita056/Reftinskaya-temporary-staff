@@ -344,7 +344,7 @@ export class CompatController {
               territory: true,
               operation: true
             },
-            orderBy: [{ createdAt: "desc" }, { id: "asc" }]
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }]
           }
         },
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }]
@@ -1649,7 +1649,7 @@ function assertPlanStatusTransition(current: { code: string; title: string }, ne
   if (current.code === next.code) return;
   const allowed: Record<string, string[]> = {
     draft: ["submitted_to_hr"],
-    submitted_to_hr: ["received_by_outsourcer"],
+    submitted_to_hr: ["draft", "received_by_outsourcer"],
     received_by_outsourcer: ["on_approval"],
     rejected: ["on_approval"],
     on_approval: ["approved", "rejected"],
